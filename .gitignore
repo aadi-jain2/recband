@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+pip-wheel-metadata/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+venv/
+.venv/
+env/
+.env
+*.env
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Data / models (large binary files)
+datasets/raw/
+datasets/*.csv
+datasets/*.zip
+datasets/*.gz
+datasets/*.parquet
+models/*.pkl
+models/*.h5
+models/*.tflite
+models/*.bin
+results/plots/
+results/metrics/
+
+# Firebase credentials (NEVER commit)
+firebase_credentials.json
+dashboard/.env.local
+*.json.credentials
+
+# Node / Next.js
+dashboard/node_modules/
+dashboard/.next/
+dashboard/out/
+dashboard/.turbo/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Logs
+*.log
+logs/
+
+# Edge build artifacts
+src/edge/cough_classifier.cc
+src/edge/__pycache__/
