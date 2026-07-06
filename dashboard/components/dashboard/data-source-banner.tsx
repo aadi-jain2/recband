@@ -4,7 +4,7 @@
  * Shows whether data is coming from real hardware, simulator, or neither.
  */
 import { useEffect, useState } from "react"
-import { Wifi, WifiOff, Cpu, AlertTriangle } from "lucide-react"
+import { Wifi, Cpu } from "lucide-react"
 
 interface HardwareStatus {
   connected: boolean
@@ -70,29 +70,8 @@ export function DataSourceBanner() {
 
   if (status === null) return null
 
-  if (!status.connected) {
-    return (
-      <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-6 py-2 text-xs text-amber-800">
-        <WifiOff className="h-3.5 w-3.5 flex-shrink-0" />
-        <span>
-          <strong>Offline mode</strong> — Firebase is not configured.{" "}
-          Add real credentials to <code className="font-mono bg-amber-100 px-1 rounded">dashboard/.env.local</code>, then restart the dashboard.
-        </span>
-      </div>
-    )
-  }
-
-  if (status.source === "none") {
-    return (
-      <div className="flex items-center gap-2 border-b border-blue-200 bg-blue-50 px-6 py-2 text-xs text-blue-800">
-        <Wifi className="h-3.5 w-3.5 flex-shrink-0" />
-        <span>
-          <strong>Firebase connected</strong> — waiting for live data.{" "}
-          Run <code className="font-mono bg-blue-100 px-1 rounded">python start_recoverpath.py</code> from the project root.
-        </span>
-      </div>
-    )
-  }
+  // Demo / fallback mode — no banner (works without Firebase)
+  if (!status.connected || status.source === "none") return null
 
   if (status.source === "simulator") {
     return (
