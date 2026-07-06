@@ -1,19 +1,19 @@
 {
-  "auc_roc": 0.8079,
-  "auc_pr": 0.7864,
-  "f1_score": 0.8096,
-  "sensitivity_recall": 0.8274,
-  "specificity": 0.7656,
+  "auc_roc": 0.8614,
+  "auc_pr": 0.7648,
+  "f1_score": 0.6261,
+  "sensitivity_recall": 0.9413,
+  "specificity": 0.4933,
   "confusion_matrix": [
     [
-      3677,
-      1126
+      4012,
+      4121
     ],
     [
-      897,
-      4300
+      227,
+      3640
     ]
   ],
-  "n_test": 10000,
-  "n_positive_test": 5197
+  "n_test": 12000,
+  "n_positive_test": 3867
 }

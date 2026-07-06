@@ -1,35 +1,356 @@
 @import "tailwindcss";
 
+/* ── RecoverPath Design System ─────────────────────────────────────────────
+   Clinical-grade interface: dense, precise, white background, zero decoration.
+   Color used ONLY for semantic meaning — never decoration.
+   Reference: Epic EHR, Linear, Stripe Dashboard, Bloomberg Terminal.
+   ──────────────────────────────────────────────────────────────────────── */
+
 :root {
-  --background: #f9fafb;
-  --foreground: #111827;
-  --brand: #0F4C81;
-  --accent: #00B4A6;
+  /* Surface */
+  --bg:            #FFFFFF;
+  --bg-subtle:     #F9FAFB;
+  --bg-muted:      #F3F4F6;
+  --border:        #E5E7EB;
+  --border-strong: #D1D5DB;
+
+  /* Text */
+  --text-primary:   #111827;
+  --text-secondary: #6B7280;
+  --text-muted:     #9CA3AF;
+  --text-inverse:   #FFFFFF;
+
+  /* Semantic risk colors — ONLY used to signal clinical state */
+  --risk-critical:       #DC2626;
+  --risk-critical-bg:    #FEF2F2;
+  --risk-critical-border:#FECACA;
+  --risk-high:           #D97706;
+  --risk-high-bg:        #FFFBEB;
+  --risk-high-border:    #FDE68A;
+  --risk-medium:         #CA8A04;
+  --risk-medium-bg:      #FEFCE8;
+  --risk-medium-border:  #FEF08A;
+  --risk-low:            #16A34A;
+  --risk-low-bg:         #F0FDF4;
+  --risk-low-border:     #BBF7D0;
+
+  /* Interactive */
+  --blue:          #2563EB;
+  --blue-hover:    #1D4ED8;
+  --blue-light:    #EFF6FF;
+
+  /* Charts */
+  --chart-spo2:    #2563EB;
+  --chart-hr:      #DC2626;
+  --chart-hrv:     #7C3AED;
+  --chart-bioz:    #0891B2;
+  --chart-rr:      #D97706;
+  --chart-cough:   #CA8A04;
+  --chart-grid:    #F3F4F6;
+  --chart-ref:     #D1D5DB;
 }
 
-.dark {
-  --background: #0f172a;
-  --foreground: #f1f5f9;
-}
+/* ── Reset & base ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-}
-
-* {
-  box-sizing: border-box;
-}
+html { font-size: 14px; }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 9999px; }
-.dark ::-webkit-scrollbar-thumb { background: #374151; }
+/* Tabular numbers for all data columns — critical for scannable alignment */
+.tabular { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+/* ── Typography scale ─────────────────────────────────────────────────────── */
+h1 { font-size: 1.125rem; font-weight: 600; letter-spacing: -0.01em; }
+h2 { font-size: 1rem;     font-weight: 600; }
+h3 { font-size: 0.875rem; font-weight: 600; }
+h4 { font-size: 0.8125rem; font-weight: 500; }
+
+/* ── Scrollbar — thin and unobtrusive ────────────────────────────────────── */
+::-webkit-scrollbar          { width: 5px; height: 5px; }
+::-webkit-scrollbar-track    { background: transparent; }
+::-webkit-scrollbar-thumb    { background: #D1D5DB; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+
+/* ── Transitions — 150ms max, never decorative ───────────────────────────── */
+button, a, [role="button"] {
+  transition: background-color 150ms ease, color 150ms ease, opacity 150ms ease;
+}
+
+/* ── Clinical table ───────────────────────────────────────────────────────── */
+.clinical-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+.clinical-table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-subtle);
+  white-space: nowrap;
+  user-select: none;
+}
+.clinical-table th.sortable { cursor: pointer; }
+.clinical-table th.sortable:hover { color: var(--text-primary); }
+.clinical-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.clinical-table tbody tr { cursor: pointer; }
+.clinical-table tbody tr:hover { background: var(--bg-subtle); }
+.clinical-table tbody tr:last-child td { border-bottom: none; }
+
+/* ── Risk dot ─────────────────────────────────────────────────────────────── */
+.risk-dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.risk-dot.CRITICAL { background: var(--risk-critical); }
+.risk-dot.HIGH     { background: var(--risk-high);     }
+.risk-dot.MEDIUM   { background: var(--risk-medium);   }
+.risk-dot.LOW      { background: var(--risk-low);      }
+
+/* ── Status row colors ────────────────────────────────────────────────────── */
+.row-CRITICAL { background: var(--risk-critical-bg); }
+.row-CRITICAL:hover { background: #fde8e8 !important; }
+.row-nonclinical { background: #fffbeb; }
+.row-nonclinical:hover { background: #fff3c4 !important; }
+
+/* ── Inline badge ─────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex; align-items: center;
+  font-size: 0.6875rem; font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 2px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.badge-CRITICAL { color: var(--risk-critical); background: var(--risk-critical-bg); border: 1px solid var(--risk-critical-border); }
+.badge-HIGH     { color: var(--risk-high);     background: var(--risk-high-bg);     border: 1px solid var(--risk-high-border);     }
+.badge-MEDIUM   { color: var(--risk-medium);   background: var(--risk-medium-bg);   border: 1px solid var(--risk-medium-border);   }
+.badge-LOW      { color: var(--risk-low);       background: var(--risk-low-bg);       border: 1px solid var(--risk-low-border);       }
+
+/* ── Risk score bar (replaces gauge) ─────────────────────────────────────── */
+.risk-bar-track {
+  height: 6px;
+  background: var(--bg-muted);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.risk-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 400ms ease;
+}
+
+/* ── Monospace note box ────────────────────────────────────────────────────── */
+.clinical-note {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0.75rem 1rem;
+  white-space: pre-wrap;
+}
+
+/* ── Section panel ────────────────────────────────────────────────────────── */
+.panel {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+.panel-header {
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+}
+
+/* ── Filter bar ───────────────────────────────────────────────────────────── */
+.filter-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.filter-btn:hover { border-color: var(--border-strong); color: var(--text-primary); }
+.filter-btn.active {
+  background: var(--text-primary);
+  color: var(--text-inverse);
+  border-color: var(--text-primary);
+}
+
+/* ── Stat card ────────────────────────────────────────────────────────────── */
+.stat-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0.875rem 1rem;
+}
+.stat-card__value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.stat-card__label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 3px;
+}
+
+/* ── Tab bar ─────────────────────────────────────────────────────────────── */
+.tab-bar {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  gap: 0;
+}
+.tab-btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  background: none;
+  border-top: none; border-left: none; border-right: none;
+}
+.tab-btn:hover { color: var(--text-primary); }
+.tab-btn.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ── Alert item ───────────────────────────────────────────────────────────── */
+.alert-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8125rem;
+}
+.alert-item:last-child { border-bottom: none; }
+.alert-item__dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+
+/* ── Chart reference lines ─────────────────────────────────────────────────── */
+.recharts-reference-line line { stroke-dasharray: 3 3; }
+
+/* ── Monitoring gap banner ─────────────────────────────────────────────────── */
+.monitoring-gap-banner {
+  background: #FFF7ED;
+  border: 1px solid #FED7AA;
+  border-radius: 3px;
+  color: #92400E;
+  font-size: 0.8125rem;
+  padding: 0.5rem 0.875rem;
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* ── Arc gauge SVG ─────────────────────────────────────────────────────────── */
+.arc-gauge-track  { fill: none; stroke: #F3F4F6; stroke-linecap: round; }
+.arc-gauge-fill   { fill: none; stroke-linecap: round; transition: stroke-dashoffset 600ms cubic-bezier(0.4,0,0.2,1); }
+
+/* ── Number count-up ───────────────────────────────────────────────────────── */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.count-update { animation: countUp 300ms ease; }
+
+/* ── Alert slide-in ────────────────────────────────────────────────────────── */
+@keyframes slideInDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.alert-enter { animation: slideInDown 200ms ease; }
+
+/* ── Tab crossfade ─────────────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.tab-content { animation: fadeIn 150ms ease; }
+
+/* ── Sticky table header ───────────────────────────────────────────────────── */
+.clinical-table thead tr th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-shadow: 0 1px 0 var(--border);
+}
+
+/* ── Chart reference band ──────────────────────────────────────────────────── */
+.recharts-reference-area-rect { opacity: 0.06; }
+
+/* ── Pulse ring (live device) ──────────────────────────────────────────────── */
+@keyframes ping {
+  75%, 100% { transform: scale(2); opacity: 0; }
+}
+.animate-ping { animation: ping 1.2s cubic-bezier(0,0,0.2,1) infinite; }
+
+/* ── Skeleton shimmer ──────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #F3F4F6 25%, #E5E7EB 50%, #F3F4F6 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+/* ── Mobile responsive ──────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .sidebar-hide { display: none !important; }
+  .mobile-nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: 56px;
+    background: white;
+    border-top: 1px solid var(--border);
+    display: flex;
+    z-index: 50;
+  }
+  .mobile-nav a {
+    flex: 1;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-size: 10px; color: var(--text-secondary);
+    gap: 2px;
+  }
+  .mobile-nav a.active { color: var(--blue); }
+}

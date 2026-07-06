@@ -69,14 +69,19 @@ function mergeFirebaseData(
   const reg = PATIENT_REGISTRY[id]
   if (!reg || !ra) return null
 
-  const vitals = hist
-    ? Object.values(hist)
-        .slice(-144)
-        .map((entry: unknown, i) => {
+  // Firebase stores readings as { "2026-06-30T22-03-00Z": {...}, ... }
+  // Keys are chronologically sortable strings — sort by key, then parse real timestamp
+  const vitals: VitalReading[] = hist
+    ? Object.entries(hist)
+        .sort(([a], [b]) => a.localeCompare(b))   // lexical sort = chronological for our key format
+        .slice(-1440)                               // last 1440 points = 24h @ 1/min
+        .map(([_key, entry], i) => {
           const e = entry as Record<string, unknown>
+          // Real timestamp stored in object takes priority over key
+          const rawTs = String(e.timestamp ?? _key.replace(/T(\d{2})-(\d{2})-(\d{2})Z/, "T$1:$2:$3Z"))
           return {
-            timestamp:    String(e.timestamp ?? new Date().toISOString()),
-            minuteOffset: i * 10,
+            timestamp:    rawTs,
+            minuteOffset: i,
             spo2:         Number(e.spo2 ?? 95),
             hrEcg:        Number(e.hr_ecg ?? 80),
             hrPpg:        Number(e.hr_ecg ?? 80),
@@ -126,6 +131,19 @@ function mergeFirebaseData(
     copdFlag:            reg.copdFlag,
     chfFlag:             reg.chfFlag,
     numPriorAdmissions:  reg.numPriorAdmissions,
+    // Data source from latest_reading — "esp32_live" or "simulator"
+    dataSource: (String(lr?.source ?? "simulator")) as Patient["dataSource"],
+    compositeRisk: ra.composite_risk_score != null ? {
+      composite_score:       Number(ra.composite_risk_score),
+      clinical_score:        Number(ra.clinical_score        ?? score),
+      behavioral_score:      Number(ra.behavioral_score      ?? 0),
+      social_score:          Number(ra.social_score          ?? 0),
+      clinical_pct:          Number(ra.clinical_pct          ?? 0.55),
+      behavioral_pct:        Number(ra.behavioral_pct        ?? 0.30),
+      social_pct:            Number(ra.social_pct            ?? 0.15),
+      explanation:           String(ra.explanation           ?? ""),
+      flagged_by_nonclinical: Boolean(ra.flagged_by_nonclinical),
+    } : undefined,
   }
 }
 
@@ -144,7 +162,7 @@ export function usePatients() {
       setLoading(false)
       setSource("fallback")
 
-      // Simulate gentle score drift every 30s to show "live" feel in fallback mode
+      // Fallback: drift scores every 60s with real wall-clock timestamp
       const ticker = setInterval(() => {
         setPatients(prev =>
           prev.map(p => ({
@@ -152,10 +170,10 @@ export function usePatients() {
             riskScore: Math.min(100, Math.max(0,
               p.riskScore + (Math.random() - 0.48) * 2
             )),
-            lastUpdated: new Date().toISOString(),
+            lastUpdated: new Date().toISOString(),  // real wall-clock time
           })).sort((a, b) => b.riskScore - a.riskScore)
         )
-      }, 30_000)
+      }, 60_000)
       return () => clearInterval(ticker)
     }
 
@@ -197,11 +215,53 @@ export function usePatient(id: string) {
     setLoading(true)
 
     if (!FIREBASE_LIVE) {
-      // Fallback: find from static snapshot
-      const all = buildFallbackPatients()
-      setPatient(all.find(p => p.id === id) ?? null)
+      // Build initial snapshot
+      const all     = buildFallbackPatients()
+      const initial = all.find(x => x.id === id) ?? null
+      setPatient(initial)
       setLoading(false)
-      return
+
+      if (!initial) return
+
+      // Every 60s: append a new drift-based reading (sliding 2h window).
+      // This simulates a real sensor polling at 1-minute cadence.
+      const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+      const ticker = setInterval(() => {
+        setPatient(prev => {
+          if (!prev) return prev
+          const last = prev.vitals[prev.vitals.length - 1]
+          if (!last) return prev
+
+          // Tiny random walk — realistic sensor noise
+          const newReading = {
+            timestamp:   new Date().toISOString(),
+            minuteOffset: last.minuteOffset + 1,
+            spo2:       clamp(last.spo2      + (Math.random() - 0.5) * 0.6,  70, 100),
+            hrEcg:      clamp(last.hrEcg     + (Math.random() - 0.5) * 2.5,  40, 200),
+            hrPpg:      clamp(last.hrPpg     + (Math.random() - 0.5) * 2.5,  40, 200),
+            hrvSdnn:    clamp(last.hrvSdnn   + (Math.random() - 0.5) * 1.5,   5, 100),
+            biozOhms:   clamp(last.biozOhms  + (Math.random() - 0.5) * 2,   200, 600),
+            rrImu:      clamp(last.rrImu     + (Math.random() - 0.5) * 0.8,   6,  40),
+            coughCount: Math.max(0, Math.round(last.coughCount + (Math.random() - 0.75))),
+            afibFlag:   Math.random() < 0.04 ? 1 : 0,
+          }
+
+          // Slide window: keep newest 120 readings
+          const newVitals = [...prev.vitals.slice(-119), newReading]
+
+          // Drift the composite score slightly
+          const newRisk = clamp(prev.riskScore + (Math.random() - 0.5) * 1.2, 0, 100)
+
+          return {
+            ...prev,
+            vitals:      newVitals,
+            riskScore:   Math.round(newRisk * 10) / 10,
+            lastUpdated: newReading.timestamp,
+          }
+        })
+      }, 60_000)
+
+      return () => clearInterval(ticker)
     }
 
     // Firebase: listen to all three sub-trees in parallel

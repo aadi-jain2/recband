@@ -1,0 +1,47 @@
+export type HealthLiteracyScore = "high" | "medium" | "low"
+
+export interface SDOHProfile {
+  patient_id: string
+  has_transportation: boolean          // false = barrier
+  lives_alone: boolean
+  medication_cost_barrier: boolean
+  health_literacy_score: HealthLiteracyScore
+  smoking_exposure_household: boolean
+  food_insecurity: boolean
+  caregiver_support: boolean           // has family/friend helping with care
+  phone_access: boolean                // can receive SMS/call reminders
+  language_barrier: boolean            // primary language not local dominant
+  social_risk_score: number            // 0-100 computed
+  social_risk_factors: string[]        // human-readable list for UI
+}
+
+// Pre-computed SDOH profiles for all 25 patients
+// 30% transportation barriers, 25% live alone, 20% cost barriers
+// CHF/COPD patients (older) have higher average social risk
+export const SDOH_PROFILES: Record<string, SDOHProfile> = {
+  P001: { patient_id:"P001", has_transportation:false, lives_alone:true,  medication_cost_barrier:false, health_literacy_score:"medium", smoking_exposure_household:false, food_insecurity:false, caregiver_support:false, phone_access:true,  language_barrier:false, social_risk_score:38, social_risk_factors:["No transportation","Lives alone"] },
+  P002: { patient_id:"P002", has_transportation:true,  lives_alone:false, medication_cost_barrier:true,  health_literacy_score:"low",    smoking_exposure_household:true,  food_insecurity:false, caregiver_support:true,  phone_access:true,  language_barrier:false, social_risk_score:42, social_risk_factors:["Medication cost barrier","Household smoke exposure","Low health literacy"] },
+  P003: { patient_id:"P003", has_transportation:false, lives_alone:true,  medication_cost_barrier:true,  health_literacy_score:"low",    smoking_exposure_household:false, food_insecurity:true,  caregiver_support:false, phone_access:true,  language_barrier:false, social_risk_score:68, social_risk_factors:["No transportation","Lives alone","Medication cost barrier","Food insecurity","Low health literacy"] },
+  P004: { patient_id:"P004", has_transportation:false, lives_alone:true,  medication_cost_barrier:true,  health_literacy_score:"medium", smoking_exposure_household:false, food_insecurity:false, caregiver_support:false, phone_access:true,  language_barrier:false, social_risk_score:55, social_risk_factors:["No transportation","Lives alone","Medication cost barrier"] },
+  P005: { patient_id:"P005", has_transportation:true,  lives_alone:false, medication_cost_barrier:false, health_literacy_score:"medium", smoking_exposure_household:true,  food_insecurity:false, caregiver_support:true,  phone_access:true,  language_barrier:false, social_risk_score:22, social_risk_factors:["Household smoke exposure"] },
+  P006: { patient_id:"P006", has_transportation:true,  lives_alone:false, medication_cost_barrier:false, health_literacy_score:"high",   smoking_exposure_household:false, food_insecurity:false, caregiver_support:true,  phone_access:true,  language_barrier:false, social_risk_score:8,  social_risk_factors:[] },
+  P007: { patient_id:"P007", has_transportation:false, lives_alone:false, medication_cost_barrier:false, health_literacy_score:"medium", smoking_exposure_household:false, food_insecurity:false, caregiver_support:true,  phone_access:true,  language_barrier:false, social_risk_score:15, social_risk_factors:["No transportation"] },
+  P008: { patient_id:"P008", has_transportation:true,  lives_alone:true,  medication_cost_barrier:true,  health_literacy_score:"low",    smoking_exposure_household:false, food_insecurity:true,  caregiver_support:false, phone_access:false, language_barrier:true,  social_risk_score:72, social_risk_factors:["Lives alone","Medication cost barrier","Food insecurity","Low health literacy","Language barrier","No phone access"] },
+  P009: { patient_id:"P009", has_transportation:true,  lives_alone:false, medication_cost_barrier:false, health_literacy_score:"high",   smoking_exposure_household:false, food_insecurity:false, caregiver_support:true,  phone_access:true,  language_barrier:false, social_risk_score:5,  social_risk_factors:[] },
+  P010: { patient_id:"P010", has_transportation:true,  lives_alone:false, medication_cost_barrier:false, health_literacy_score:"high",   smoking_exposure_household:false, food_insecurity:false, caregiver_support:true,  phone_access:true,  language_barrier:false, social_risk_score:5,  social_risk_factors:[] },
+  P011: { patient_id:"P011", has_transportation:false, lives_alone:false, medication_cost_barrier:true,  health_literacy_score:"medium", smoking_exposure_household:true,  food_insecurity:false, caregiver_support:true,  phone_access:true,  language_barrier:false, social_risk_score:32, social_risk_factors:["No transportation","Medication cost barrier","Household smoke exposure"] },
+  P012: { patient_id:"P012", has_transportation:true,  lives_alone:true,  medication_cost_barrier:false, health_literacy_score:"medium", smoking_exposure_household:false, food_insecurity:false, caregiver_support:false, phone_access:true,  language_barrier:false, social_risk_score:28, social_risk_factors:["Lives alone"] },
+  P013: { patient_id:"P013", has_transportation:false, lives_alone:false, medication_cost_barrier:false, health_literacy_score:"medium", smoking_exposure_household:false, food_insecurity:false, caregiver_support:true,  phone_access:true,  language_barrier:false, social_risk_score:12, social_risk_factors:["No transportation"] },
+  P014: { patient_id:"P014", has_transportation:true,  lives_alone:false, medication_cost_barrier:false, health_literacy_score:"high",   smoking_exposure_household:false, food_insecurity:false, caregiver_support:true,  phone_access:true,  language_barrier:false, social_risk_score:5,  social_risk_factors:[] },
+  P015: { patient_id:"P015", has_transportation:true,  lives_alone:false, medication_cost_barrier:true,  health_literacy_score:"medium", smoking_exposure_household:true,  food_insecurity:false, caregiver_support:true,  phone_access:true,  language_barrier:false, social_risk_score:30, social_risk_factors:["Medication cost barrier","Household smoke exposure"] },
+  P016: { patient_id:"P016", has_transportation:true,  lives_alone:false, medication_cost_barrier:false, health_literacy_score:"high",   smoking_exposure_household:false, food_insecurity:false, caregiver_support:true,  phone_access:true,  language_barrier:false, social_risk_score:5,  social_risk_factors:[] },
+  P017: { patient_id:"P017", has_transportation:false, lives_alone:true,  medication_cost_barrier:true,  health_literacy_score:"low",    smoking_exposure_household:false, food_insecurity:true,  caregiver_support:false, phone_access:true,  language_barrier:false, social_risk_score:62, social_risk_factors:["No transportation","Lives alone","Medication cost barrier","Food insecurity","Low health literacy"] },
+  P018: { patient_id:"P018", has_transportation:true,  lives_alone:false, medication_cost_barrier:false, health_literacy_score:"high",   smoking_exposure_household:false, food_insecurity:false, caregiver_support:true,  phone_access:true,  language_barrier:false, social_risk_score:5,  social_risk_factors:[] },
+  P019: { patient_id:"P019", has_transportation:true,  lives_alone:false, medication_cost_barrier:false, health_literacy_score:"high",   smoking_exposure_household:false, food_insecurity:false, caregiver_support:true,  phone_access:true,  language_barrier:false, social_risk_score:5,  social_risk_factors:[] },
+  P020: { patient_id:"P020", has_transportation:true,  lives_alone:false, medication_cost_barrier:false, health_literacy_score:"medium", smoking_exposure_household:false, food_insecurity:false, caregiver_support:true,  phone_access:true,  language_barrier:false, social_risk_score:8,  social_risk_factors:[] },
+  P021: { patient_id:"P021", has_transportation:false, lives_alone:false, medication_cost_barrier:true,  health_literacy_score:"medium", smoking_exposure_household:false, food_insecurity:false, caregiver_support:true,  phone_access:true,  language_barrier:false, social_risk_score:20, social_risk_factors:["No transportation","Medication cost barrier"] },
+  P022: { patient_id:"P022", has_transportation:true,  lives_alone:true,  medication_cost_barrier:false, health_literacy_score:"medium", smoking_exposure_household:true,  food_insecurity:false, caregiver_support:false, phone_access:true,  language_barrier:false, social_risk_score:35, social_risk_factors:["Lives alone","Household smoke exposure"] },
+  P023: { patient_id:"P023", has_transportation:true,  lives_alone:false, medication_cost_barrier:false, health_literacy_score:"high",   smoking_exposure_household:false, food_insecurity:false, caregiver_support:true,  phone_access:true,  language_barrier:false, social_risk_score:5,  social_risk_factors:[] },
+  P024: { patient_id:"P024", has_transportation:false, lives_alone:true,  medication_cost_barrier:false, health_literacy_score:"medium", smoking_exposure_household:false, food_insecurity:false, caregiver_support:false, phone_access:true,  language_barrier:false, social_risk_score:28, social_risk_factors:["No transportation","Lives alone"] },
+  P025: { patient_id:"P025", has_transportation:true,  lives_alone:false, medication_cost_barrier:false, health_literacy_score:"high",   smoking_exposure_household:false, food_insecurity:false, caregiver_support:true,  phone_access:true,  language_barrier:false, social_risk_score:5,  social_risk_factors:[] },
+}

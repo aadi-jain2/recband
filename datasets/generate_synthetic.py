@@ -1,6 +1,8 @@
 ﻿"""
-RecoverPath â€” Synthetic Vitals Generator
-Produces 50,000 clinically-grounded 24-hour patient windows.
+RecoverPath — Synthetic Vitals Generator (v2)
+Produces 60,000 clinically-grounded 24-hour patient windows with
+an explicit 4-level severity gradient: LOW / MEDIUM / HIGH / CRITICAL.
+This ensures the XGBoost meta-classifier learns a monotonic risk function.
 """
 
 import numpy as np
@@ -8,224 +10,194 @@ import pandas as pd
 from pathlib import Path
 
 SEED = 42
-N_PATIENTS = 50_000
+N_PATIENTS = 60_000          # larger dataset for better generalisation
 OUT_DIR = Path(__file__).parent
 OUT_PATH = OUT_DIR / "synthetic_vitals.csv"
 
 rng = np.random.default_rng(SEED)
 
 
-# â”€â”€ Per-condition clinical distributions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Per-severity clinical distributions ──────────────────────────────────────
+# Each severity tier maps to a clinical phenotype. We sample from these
+# distributions and assign a readmission label probabilistically.
 
-def _sample_chf(n):
-    hr_ppg = rng.normal(88, 15, n).clip(40, 180)
-    hr_ecg = hr_ppg + rng.normal(0, 2, n)
-    spo2_mean = rng.normal(93, 2.5, n).clip(70, 100)
-    rr = rng.normal(21, 4, n).clip(8, 50)
-    bioz_baseline = rng.normal(55, 8, n).clip(20, 100)
-    bioz_trend = rng.normal(-0.7, 0.4, n)          # drops over time = fluid â†‘
-    bioz_delta = bioz_trend * 24
-    thoracic_fluid = rng.normal(0.62, 0.12, n).clip(0, 1)
-    hrv_sdnn = rng.normal(22, 8, n).clip(5, 100)
-    hrv_rmssd = hrv_sdnn * rng.uniform(0.8, 1.2, n)
-    afib_pct = rng.beta(1.5, 6, n)
-    cough_sum = rng.poisson(4, n).astype(float)
-    wheeze_pct = rng.beta(1.2, 8, n)
-    activity = rng.normal(0.25, 0.1, n).clip(0, 1)
-    posture_supine = rng.normal(0.55, 0.15, n).clip(0, 1)
-    return locals()
+TIERS = {
+    "LOW":      {"weight": 0.35, "label_prob": 0.05},   # healthy post-discharge
+    "MEDIUM":   {"weight": 0.30, "label_prob": 0.20},   # mild concern
+    "HIGH":     {"weight": 0.20, "label_prob": 0.55},   # significant deterioration
+    "CRITICAL": {"weight": 0.15, "label_prob": 0.90},   # near-readmission
+}
+
+CONDITIONS = ["CHF", "COPD", "Diabetes", "PostSurg"]
+COND_WEIGHTS = [0.35, 0.30, 0.20, 0.15]
 
 
-def _sample_copd(n):
-    hr_ppg = rng.normal(82, 12, n).clip(40, 180)
-    hr_ecg = hr_ppg + rng.normal(0, 2, n)
-    spo2_mean = rng.normal(91, 3, n).clip(70, 100)
-    rr = rng.normal(22, 4, n).clip(8, 50)
-    bioz_baseline = rng.normal(60, 10, n).clip(20, 120)
-    bioz_trend = rng.normal(0.0, 0.3, n)
-    bioz_delta = bioz_trend * 24
-    thoracic_fluid = rng.normal(0.45, 0.10, n).clip(0, 1)
-    hrv_sdnn = rng.normal(28, 10, n).clip(5, 120)
-    hrv_rmssd = hrv_sdnn * rng.uniform(0.75, 1.1, n)
-    afib_pct = rng.beta(1.2, 8, n)
-    cough_sum = rng.poisson(8, n).astype(float) * 24  # hourly * 24
-    wheeze_pct = rng.beta(2, 5, n)
-    activity = rng.normal(0.30, 0.12, n).clip(0, 1)
-    posture_supine = rng.normal(0.45, 0.15, n).clip(0, 1)
-    return locals()
+def _clip(arr, lo, hi):
+    return np.clip(arr, lo, hi)
 
 
-def _sample_diabetic(n):
-    hr_ppg = rng.normal(82, 12, n).clip(40, 180)
-    hr_ecg = hr_ppg + rng.normal(0, 2, n)
-    spo2_mean = rng.normal(96, 2, n).clip(70, 100)
-    rr = rng.normal(17, 3, n).clip(8, 50)
-    bioz_baseline = rng.normal(65, 10, n).clip(20, 120)
-    bioz_trend = rng.normal(0.1, 0.25, n)
-    bioz_delta = bioz_trend * 24
-    thoracic_fluid = rng.normal(0.38, 0.09, n).clip(0, 1)
-    hrv_sdnn = rng.normal(30, 12, n).clip(5, 120)
-    hrv_rmssd = hrv_sdnn * rng.uniform(0.8, 1.2, n)
-    afib_pct = rng.beta(1.0, 10, n)
-    cough_sum = rng.poisson(2, n).astype(float)
-    wheeze_pct = rng.beta(1.0, 12, n)
-    activity = rng.normal(0.40, 0.15, n).clip(0, 1)
-    posture_supine = rng.normal(0.40, 0.15, n).clip(0, 1)
-    return locals()
+def sample_tier(tier: str, n: int, condition: str) -> dict:
+    """Return a dict of feature arrays for n patients at the given severity tier."""
+
+    # ── Severity multipliers ─────────────────────────────────────────────────
+    # Each tier degrades physiology relative to LOW (stable) baseline.
+    severity = {"LOW": 0.0, "MEDIUM": 0.33, "HIGH": 0.67, "CRITICAL": 1.0}[tier]
+
+    # ── Shared noise ─────────────────────────────────────────────────────────
+    noise = lambda mu, sigma, lo, hi: _clip(rng.normal(mu, sigma, n), lo, hi)
+
+    # ── Oxygen saturation ────────────────────────────────────────────────────
+    # LOW: ~97-98%, CRITICAL: ~85-89%
+    spo2_base = {
+        "CHF": 93, "COPD": 91, "Diabetes": 97, "PostSurg": 96
+    }.get(condition, 96)
+    spo2_drop = severity * {"LOW": 0, "MEDIUM": 2, "HIGH": 5, "CRITICAL": 10}[tier]
+    spo2_mean = noise(spo2_base - spo2_drop, 1.5 + severity * 1.5, 72, 100)
+    spo2_min  = spo2_mean - noise(1 + severity * 4, 0.5, 0, 8)
+    spo2_min  = _clip(spo2_min, 70, 100)
+    spo2_std  = noise(0.5 + severity * 2.5, 0.3, 0.1, 5)
+    # Time below 92%: LOW ~0%, CRITICAL ~30-50%
+    spo2_below = _clip(rng.beta(1 + severity * 4, 8 - severity * 4, n) * (severity * 0.6), 0, 0.8)
+
+    # ── Heart rate ───────────────────────────────────────────────────────────
+    hr_base = {"CHF": 88, "COPD": 82, "Diabetes": 80, "PostSurg": 78}.get(condition, 80)
+    hr_ppg_mean  = noise(hr_base + severity * 22, 8 + severity * 8, 40, 160)
+    hr_ecg_mean  = hr_ppg_mean + noise(0, 2, -5, 5)
+    hr_ppg_std   = noise(5 + severity * 14, 2, 1, 25)
+    hr_ppg_max   = hr_ppg_mean + noise(15 + severity * 25, 5, 0, 60)
+    hr_ppg_trend = noise(0 + severity * 5, 2, -5, 15)
+
+    # ── HRV ─────────────────────────────────────────────────────────────────
+    # LOW: ~45-55ms, CRITICAL: ~8-12ms
+    hrv_base = {"CHF": 22, "COPD": 28, "Diabetes": 30, "PostSurg": 38}.get(condition, 35)
+    hrv_sdnn  = noise(hrv_base * (1 - severity * 0.75), 5, 4, 120)
+    hrv_rmssd = hrv_sdnn * noise(0.9, 0.15, 0.5, 1.5)
+
+    # ── Bioimpedance ─────────────────────────────────────────────────────────
+    # LOW: stable ~65-75 ohms, CRITICAL: dropping/low ~40-50 ohms
+    bioz_base = {"CHF": 55, "COPD": 60, "Diabetes": 65, "PostSurg": 68}.get(condition, 65)
+    bioz_ohms_mean     = noise(bioz_base - severity * 20, 6, 20, 100)
+    bioz_trend         = noise(-severity * 0.6, 0.2, -2, 1)   # negative = fluid accumulating
+    bioz_delta         = noise(severity * 14, 3, -2, 25)      # LOW: ~0, CRITICAL: ~12-18
+    thoracic_fluid     = noise(0.30 + severity * 0.45, 0.08, 0, 1)
+
+    # ── Respiratory ──────────────────────────────────────────────────────────
+    rr_base = {"CHF": 21, "COPD": 22, "Diabetes": 17, "PostSurg": 16}.get(condition, 17)
+    bioz_rr_mean = noise(rr_base + severity * 10, 2, 8, 45)
+    rr_imu_mean  = noise(rr_base + severity * 10, 2.5, 8, 45)
+    rr_imu_std   = noise(1.5 + severity * 3.5, 0.5, 0.3, 8)
+    rr_interval_mean = 60000 / _clip(hr_ppg_mean, 30, 200)
+    rr_interval_std  = noise(50 + severity * 60, 10, 20, 200)
+
+    # ── AFib ─────────────────────────────────────────────────────────────────
+    afib_a = 0.8 + severity * 5
+    afib_b = 15 - severity * 12
+    afib_pct  = _clip(rng.beta(afib_a, max(0.5, afib_b), n), 0, 1) * (severity + 0.05)
+    afib_days = (afib_pct * 7 + rng.normal(0, 0.3, n)).clip(0, 7).round().astype(int)
+
+    # ── QT interval ──────────────────────────────────────────────────────────
+    qt_interval = noise(400 + severity * 50, 15, 350, 500)
+
+    # ── Cough / Wheeze ───────────────────────────────────────────────────────
+    is_copd = float(condition == "COPD")
+    is_chf  = float(condition == "CHF")
+    cough_base = 1 + is_copd * 6 + is_chf * 2
+    cough_sum_24hr   = rng.poisson((cough_base + severity * 40) * 1.0, n).astype(float)
+    cough_max_hourly = cough_sum_24hr / 24 * noise(2, 0.5, 1, 5)
+    cough_trend      = noise(severity * 1.2, 0.5, -1, 4)
+    wheeze_pct_hours = _clip(rng.beta(0.5 + severity * 3, max(0.5, 10 - severity * 8), n) * (severity * 0.7 + is_copd * 0.4), 0, 0.9)
+
+    # ── Activity ─────────────────────────────────────────────────────────────
+    activity_mean          = noise(0.55 - severity * 0.45, 0.08, 0.01, 0.9)
+    nocturnal_activity     = noise(0.08 + severity * 0.18, 0.04, 0, 0.5)
+    posture_supine         = noise(0.35 + severity * 0.45, 0.08, 0.1, 0.9)
+
+    # ── Demographics ─────────────────────────────────────────────────────────
+    age_base = {"CHF": 72, "COPD": 68, "Diabetes": 62, "PostSurg": 58}.get(condition, 65)
+    age = noise(age_base + severity * 5, 8, 35, 90)
+    days_since_discharge  = _clip(rng.gamma(2 + (1-severity)*3, 3 + (1-severity)*4, n), 1, 30).astype(int)
+    num_prior_admissions  = rng.integers(0, min(int(1 + severity * 4) + 1, 6), n)
+    num_medications       = noise(6 + severity * 8, 2, 2, 20)
+    num_diagnoses         = noise(3 + severity * 5, 1.5, 1, 12)
+
+    diabetes_flag = (rng.random(n) < (0.3 + severity * 0.3 + (0.3 if condition == "Diabetes" else 0))).astype(int)
+    copd_flag     = (rng.random(n) < (0.1 + severity * 0.2 + (0.7 if condition == "COPD"     else 0))).astype(int)
+    chf_flag      = (rng.random(n) < (0.1 + severity * 0.3 + (0.8 if condition == "CHF"      else 0))).astype(int)
+
+    return {
+        "spo2_mean":               spo2_mean,
+        "spo2_min":                spo2_min,
+        "spo2_std":                spo2_std,
+        "spo2_time_below_92_pct":  spo2_below,
+        "hr_ppg_mean":             hr_ppg_mean,
+        "hr_ppg_std":              hr_ppg_std,
+        "hr_ppg_max":              hr_ppg_max,
+        "hr_ppg_trend_6hr":        hr_ppg_trend,
+        "hr_ecg_mean":             hr_ecg_mean,
+        "rr_interval_mean":        rr_interval_mean,
+        "rr_interval_std":         rr_interval_std,
+        "hrv_sdnn":                hrv_sdnn,
+        "hrv_rmssd":               hrv_rmssd,
+        "hrv_lf_hf_ratio":         np.full(n, np.nan),
+        "qt_interval_mean":        qt_interval,
+        "qt_corrected":            np.full(n, np.nan),
+        "afib_pct_readings":       afib_pct,
+        "afib_days_in_window":     afib_days.astype(float),
+        "bioz_ohms_mean":          bioz_ohms_mean,
+        "bioz_ohms_trend_24hr":    bioz_trend,
+        "bioz_delta_from_baseline": bioz_delta,
+        "thoracic_fluid_index":    thoracic_fluid,
+        "bioz_rr_mean":            bioz_rr_mean,
+        "rr_imu_mean":             rr_imu_mean,
+        "rr_imu_std":              rr_imu_std,
+        "activity_mean":           activity_mean,
+        "nocturnal_activity_mean": nocturnal_activity,
+        "posture_supine_pct":      posture_supine,
+        "cough_sum_24hr":          cough_sum_24hr,
+        "cough_max_hourly":        cough_max_hourly,
+        "cough_trend_6hr":         cough_trend,
+        "wheeze_pct_hours":        wheeze_pct_hours,
+        "age":                     age,
+        "days_since_discharge":    days_since_discharge.astype(float),
+        "num_prior_admissions_90d": num_prior_admissions.astype(float),
+        "num_medications":         num_medications,
+        "num_diagnoses":           num_diagnoses,
+        "diabetes_flag":           diabetes_flag.astype(float),
+        "copd_flag":               copd_flag.astype(float),
+        "chf_flag":                chf_flag.astype(float),
+    }
 
 
-def _sample_general(n):
-    hr_ppg = rng.normal(75, 10, n).clip(40, 180)
-    hr_ecg = hr_ppg + rng.normal(0, 2, n)
-    spo2_mean = rng.normal(97, 1.5, n).clip(70, 100)
-    rr = rng.normal(16, 2.5, n).clip(8, 50)
-    bioz_baseline = rng.normal(70, 8, n).clip(20, 120)
-    bioz_trend = rng.normal(0.05, 0.2, n)
-    bioz_delta = bioz_trend * 24
-    thoracic_fluid = rng.normal(0.32, 0.08, n).clip(0, 1)
-    hrv_sdnn = rng.normal(42, 14, n).clip(5, 150)
-    hrv_rmssd = hrv_sdnn * rng.uniform(0.85, 1.15, n)
-    afib_pct = rng.beta(0.8, 15, n)
-    cough_sum = rng.poisson(1, n).astype(float)
-    wheeze_pct = rng.beta(0.5, 15, n)
-    activity = rng.normal(0.55, 0.18, n).clip(0, 1)
-    posture_supine = rng.normal(0.35, 0.12, n).clip(0, 1)
-    return locals()
+def build_dataset(n_total: int) -> pd.DataFrame:
+    frames = []
+    for tier, cfg in TIERS.items():
+        n_tier = round(n_total * cfg["weight"])
+        conds  = rng.choice(CONDITIONS, p=COND_WEIGHTS, size=n_tier)
+        for cond in CONDITIONS:
+            mask = conds == cond
+            n_cond = mask.sum()
+            if n_cond == 0:
+                continue
+            feat = sample_tier(tier, n_cond, cond)
+            df_part = pd.DataFrame(feat)
+            # Label: Bernoulli sample from tier probability
+            df_part["label"] = (rng.random(n_cond) < cfg["label_prob"]).astype(int)
+            df_part["condition"] = cond
+            df_part["severity_tier"] = tier
+            frames.append(df_part)
 
-
-# â”€â”€ Assemble full feature frame â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-def build_features(params: dict, condition: str, n: int) -> pd.DataFrame:
-    hr_ppg = params["hr_ppg"]
-    hr_ecg = params["hr_ecg"]
-    spo2_mean = params["spo2_mean"]
-    rr = params["rr"]
-
-    df = pd.DataFrame()
-
-    # MAX30102 â€” PPG
-    df["spo2_mean"] = spo2_mean
-    df["spo2_min"] = spo2_mean - rng.uniform(0, 4, n)
-    df["spo2_std"] = rng.uniform(0.5, 3, n)
-    df["spo2_time_below_92_pct"] = np.where(
-        spo2_mean < 93, rng.uniform(0.05, 0.40, n), rng.uniform(0, 0.08, n)
-    )
-    df["hr_ppg_mean"] = hr_ppg
-    df["hr_ppg_std"] = rng.uniform(3, 18, n)
-    df["hr_ppg_max"] = hr_ppg + rng.uniform(10, 35, n)
-    df["hr_ppg_trend_6hr"] = rng.normal(0, 3, n)
-
-    # MAX30003 â€” ECG
-    df["hr_ecg_mean"] = hr_ecg
-    df["rr_interval_mean"] = 60_000 / hr_ecg.clip(30, 200)
-    df["rr_interval_std"] = rng.uniform(20, 120, n)
-    df["hrv_sdnn"] = params["hrv_sdnn"]
-    df["hrv_rmssd"] = params["hrv_rmssd"]
-    df["qt_interval_mean"] = rng.normal(400, 30, n).clip(300, 560)
-    df["afib_pct_readings"] = params["afib_pct"]
-    df["afib_days_in_window"] = (params["afib_pct"] * 7).astype(int).clip(0, 7)
-
-    # MAX30009 â€” BioZ
-    df["bioz_ohms_mean"] = params["bioz_baseline"]
-    df["bioz_ohms_trend_24hr"] = params["bioz_trend"]
-    df["bioz_delta_from_baseline"] = params["bioz_delta"]
-    df["thoracic_fluid_index"] = params["thoracic_fluid"]
-    df["bioz_rr_mean"] = rr + rng.normal(0, 1.5, n)
-
-    # MPU6050 â€” IMU
-    df["rr_imu_mean"] = rr
-    df["rr_imu_std"] = rng.uniform(1, 4, n)
-    df["activity_mean"] = params["activity"]
-    df["nocturnal_activity_mean"] = params["activity"] * rng.uniform(0.1, 0.4, n)
-    df["posture_supine_pct"] = params["posture_supine"]
-
-    # INMP441 â€” Audio
-    df["cough_sum_24hr"] = params["cough_sum"]
-    df["cough_max_hourly"] = params["cough_sum"] / 24 + rng.uniform(0, 2, n)
-    df["cough_trend_6hr"] = rng.normal(0, 0.5, n)
-    df["wheeze_pct_hours"] = params["wheeze_pct"]
-
-    # Cross-sensor
-    df["hr_sensor_disagreement"] = np.abs(hr_ecg - hr_ppg)
-    df["rr_sensor_disagreement"] = np.abs(df["bioz_rr_mean"] - df["rr_imu_mean"])
-
-    # Patient context
-    df["age"] = rng.integers(45, 90, n)
-    df["days_since_discharge"] = rng.integers(0, 30, n)
-    df["num_prior_admissions_90d"] = rng.integers(0, 6, n)
-    df["num_medications"] = rng.integers(2, 20, n)
-    df["num_diagnoses"] = rng.integers(1, 12, n)
-    df["diabetes_flag"] = int(condition == "diabetic")
-    df["copd_flag"] = int(condition == "copd")
-    df["chf_flag"] = int(condition == "chf")
-
-    # Placeholder ECG features (NaN)
-    df["hrv_lf_hf_ratio"] = np.nan
-    df["qt_corrected"] = np.nan
-
-    df["condition"] = condition
+    df = pd.concat(frames, ignore_index=True).sample(frac=1, random_state=42)
+    df = df.reset_index(drop=True)
     return df
 
 
-# â”€â”€ Label logic â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-def assign_labels(df: pd.DataFrame) -> np.ndarray:
-    labels = (
-        ((df["spo2_mean"] < 93) & (df["days_since_discharge"] < 7))
-        | (df["bioz_delta_from_baseline"] > 8)
-        | ((df["rr_imu_mean"] > 22) & (df["cough_sum_24hr"] > 40))
-        | (df["hrv_sdnn"] < 20)
-        | (df["afib_days_in_window"] > 3)
-        | (df["spo2_time_below_92_pct"] > 0.15)
-    ).astype(int).values
-
-    # 20% label noise
-    noise_mask = rng.random(len(labels)) < 0.20
-    labels[noise_mask] = 1 - labels[noise_mask]
-    return labels
-
-
-# â”€â”€ Main â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-def main():
-    if OUT_PATH.exists():
-        print(f"[SYNTHETIC] Already exists: {OUT_PATH} â€” skipping regeneration.")
-        return
-
-    print(f"[SYNTHETIC] Generating {N_PATIENTS:,} patient windows â€¦")
-    counts = {
-        "chf": int(N_PATIENTS * 0.30),
-        "copd": int(N_PATIENTS * 0.25),
-        "diabetic": int(N_PATIENTS * 0.25),
-        "general": N_PATIENTS - int(N_PATIENTS * 0.80),
-    }
-
-    samplers = {
-        "chf": _sample_chf,
-        "copd": _sample_copd,
-        "diabetic": _sample_diabetic,
-        "general": _sample_general,
-    }
-
-    parts = []
-    for cond, n in counts.items():
-        print(f"  Sampling {n:,} {cond.upper()} patients â€¦")
-        params = samplers[cond](n)
-        part_df = build_features(params, cond, n)
-        parts.append(part_df)
-
-    df = pd.concat(parts, ignore_index=True)
-    df = df.sample(frac=1, random_state=SEED).reset_index(drop=True)
-
-    df["label"] = assign_labels(df)
-
-    df.to_csv(OUT_PATH, index=False)
-    pos_rate = df["label"].mean()
-    print(f"[SYNTHETIC] Saved {len(df):,} rows â†’ {OUT_PATH}")
-    print(f"[SYNTHETIC] Positive rate (readmitted): {pos_rate:.1%}")
-    print(f"[SYNTHETIC] Feature columns: {len(df.columns) - 2} (excl. condition/label)")
-
-
 if __name__ == "__main__":
-    main()
-
+    print(f"[GEN] Generating {N_PATIENTS:,} synthetic patient windows …")
+    df = build_dataset(N_PATIENTS)
+    print(f"[GEN] Dataset: {len(df)} rows, {df.shape[1]} columns")
+    print(f"[GEN] Positive rate: {df['label'].mean():.1%}")
+    print(f"[GEN] Tier distribution:\n{df['severity_tier'].value_counts().to_string()}")
+    # Drop severity_tier (target encoding leak risk) before saving
+    df_out = df.drop(columns=["severity_tier"])
+    df_out.to_csv(OUT_PATH, index=False)
+    print(f"[GEN] Saved -> {OUT_PATH}")

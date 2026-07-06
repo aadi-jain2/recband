@@ -230,6 +230,50 @@ def demo(dry_run: bool = False, fast: bool = False):
     pause(3)
 
     # ══════════════════════════════════════════════════════════════════════════
+    # Phase 8b — THE KEY DEMO BEAT: Sunita Rao — non-clinical risk only
+    # ══════════════════════════════════════════════════════════════════════════
+    banner("CORE DIFFERENTIATION: Sunita Rao — Normal Vitals, HIGH Risk", CYAN)
+    phase(9, "4:00+", "Sunita Rao (P004, Diabetic): vitals completely NORMAL", CYAN)
+
+    sunita = get_patient(sim, "P004")
+    if sunita:
+        # Force stable vitals — clinical component should be LOW/MEDIUM
+        force_state(sim, "P004", PatientState.STABLE)
+        sunita.vitals.spo2 = 96.5
+        sunita.vitals.hrv_sdnn = 38.0
+        sunita.vitals.hr_ecg = 80.0
+        sunita.vitals.rr_imu = 16.0
+        sunita.vitals.cough_sum = 2.0
+        # But force high behavioral risk in the sim
+        sunita.critical_missed_streak = 4    # Missed insulin 4 days in a row
+        sunita.no_show_count = 2              # No-showed 2 appointments
+        sunita.has_scheduled_within_7d = False
+        sunita.overall_adherence_pct = 0.38   # LOW adherence tier
+
+        run_n_steps(sim, 2, "Scoring Sunita with composite engine…")
+        sunita_risk = sim._risk_cache.get("P004", 0)
+
+        print(f"\n  {CYAN}{BOLD}*** CORE DIFFERENTIATION MOMENT ***{RESET}")
+        print(f"  {CYAN}Patient: Sunita Rao (P004) — Type 2 Diabetes{RESET}")
+        print(f"  {GREEN}SpO2: {sunita.vitals.spo2:.1f}%         → NORMAL{RESET}")
+        print(f"  {GREEN}HRV SDNN: {sunita.vitals.hrv_sdnn:.0f}ms     → NORMAL{RESET}")
+        print(f"  {GREEN}Heart Rate: {sunita.vitals.hr_ecg:.0f} bpm    → NORMAL{RESET}")
+        print(f"  {GREEN}Respiratory Rate: {sunita.vitals.rr_imu:.0f}  → NORMAL{RESET}")
+        print()
+        print(f"  {RED}Missed insulin 4 days in a row{RESET}")
+        print(f"  {RED}No-showed 2 follow-up appointments since discharge{RESET}")
+        print(f"  {RED}Lives alone, no transportation, medication cost barrier{RESET}")
+        print()
+        print(f"  {ORANGE}{BOLD}Composite Risk Score: {sunita_risk:.0f} → HIGH{RESET}")
+        print(f"  {ORANGE}Risk Drivers: Behavioral (pill icon) + Social (house icon){RESET}")
+        print(f"  {ORANGE}Clinical component: LOW (vitals stable){RESET}")
+        print()
+        print(f"  {DIM}A vitals-only system (Biofourmis, Current Health) would flag this patient as LOW RISK.{RESET}")
+        print(f"  {DIM}RecoverPath flags her as HIGH RISK because of what the wearable CANNOT see.{RESET}")
+        print(f"  {DIM}Dashboard shows: \"Risk Drivers: Behavioral + Social — Clinical: Normal\"{RESET}")
+        pause(4)
+
+    # ══════════════════════════════════════════════════════════════════════════
     # Phase 9 — 4:30: Show analytics
     # ══════════════════════════════════════════════════════════════════════════
     banner("Phase 9 — Population Analytics", CYAN)

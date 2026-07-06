@@ -13,38 +13,51 @@ import type { Patient, Alert, RiskTier } from "./types"
 
 // ── Static patient demographics ───────────────────────────────────────────────
 // These never change during a session. Simulator writes risk data separately.
+/** Compute actual days since discharge from real wall-clock date */
+function daysSince(dateStr: string): number {
+  const d = new Date(dateStr)
+  const now = new Date()
+  return Math.max(0, Math.floor((now.getTime() - d.getTime()) / 86400000))
+}
+
+// Discharge dates are real historical dates — daysSinceDischarge is computed live.
+// Patients discharged around Jun 26-28, 2026 will show increasing days as time passes.
+const _RAW_REGISTRY = [
+  { id:"P001", name:"Arjun Sharma",       age:72, diagnosis:"CHF",      diagnosisCode:"I50.0", dischargeDate:"2026-06-26", numMedications:14, numDiagnoses:8, numPriorAdmissions:2, diabetesFlag:false, copdFlag:false, chfFlag:true  },
+  { id:"P002", name:"Kavitha Nair",        age:68, diagnosis:"COPD",     diagnosisCode:"J44.1", dischargeDate:"2026-06-24", numMedications:11, numDiagnoses:7, numPriorAdmissions:1, diabetesFlag:false, copdFlag:true,  chfFlag:false },
+  { id:"P003", name:"Rajan Pillai",        age:77, diagnosis:"CHF",      diagnosisCode:"I50.0", dischargeDate:"2026-06-27", numMedications:16, numDiagnoses:9, numPriorAdmissions:3, diabetesFlag:false, copdFlag:false, chfFlag:true  },
+  { id:"P004", name:"Sunita Rao",          age:64, diagnosis:"Diabetes", diagnosisCode:"E11.9", dischargeDate:"2026-06-21", numMedications:10, numDiagnoses:5, numPriorAdmissions:1, diabetesFlag:true,  copdFlag:false, chfFlag:false },
+  { id:"P005", name:"Mohan Das",           age:71, diagnosis:"COPD",     diagnosisCode:"J44.1", dischargeDate:"2026-06-23", numMedications:12, numDiagnoses:6, numPriorAdmissions:2, diabetesFlag:false, copdFlag:true,  chfFlag:false },
+  { id:"P006", name:"Priya Krishnan",      age:59, diagnosis:"CHF",      diagnosisCode:"I50.0", dischargeDate:"2026-06-18", numMedications:9,  numDiagnoses:7, numPriorAdmissions:1, diabetesFlag:false, copdFlag:false, chfFlag:true  },
+  { id:"P007", name:"Venkat Iyer",         age:66, diagnosis:"CHF",      diagnosisCode:"I50.0", dischargeDate:"2026-06-25", numMedications:13, numDiagnoses:8, numPriorAdmissions:2, diabetesFlag:false, copdFlag:false, chfFlag:true  },
+  { id:"P008", name:"Lakshmi Devi",        age:74, diagnosis:"COPD",     diagnosisCode:"J44.1", dischargeDate:"2026-06-22", numMedications:10, numDiagnoses:6, numPriorAdmissions:1, diabetesFlag:false, copdFlag:true,  chfFlag:false },
+  { id:"P009", name:"Ashok Patel",         age:58, diagnosis:"Diabetes", diagnosisCode:"E11.9", dischargeDate:"2026-06-16", numMedications:8,  numDiagnoses:4, numPriorAdmissions:0, diabetesFlag:true,  copdFlag:false, chfFlag:false },
+  { id:"P010", name:"Meena Agarwal",       age:62, diagnosis:"PostSurg", diagnosisCode:"Z96.9", dischargeDate:"2026-06-19", numMedications:7,  numDiagnoses:4, numPriorAdmissions:0, diabetesFlag:false, copdFlag:false, chfFlag:false },
+  { id:"P011", name:"Rajesh Kumar",        age:55, diagnosis:"COPD",     diagnosisCode:"J44.1", dischargeDate:"2026-06-14", numMedications:9,  numDiagnoses:5, numPriorAdmissions:1, diabetesFlag:false, copdFlag:true,  chfFlag:false },
+  { id:"P012", name:"Deepa Menon",         age:67, diagnosis:"CHF",      diagnosisCode:"I50.0", dischargeDate:"2026-06-11", numMedications:11, numDiagnoses:7, numPriorAdmissions:2, diabetesFlag:false, copdFlag:false, chfFlag:true  },
+  { id:"P013", name:"Suresh Nambiar",      age:70, diagnosis:"Diabetes", diagnosisCode:"E11.9", dischargeDate:"2026-06-17", numMedications:9,  numDiagnoses:5, numPriorAdmissions:1, diabetesFlag:true,  copdFlag:false, chfFlag:false },
+  { id:"P014", name:"Geetha Subramanian",  age:63, diagnosis:"PostSurg", diagnosisCode:"Z96.9", dischargeDate:"2026-06-12", numMedications:6,  numDiagnoses:4, numPriorAdmissions:0, diabetesFlag:false, copdFlag:false, chfFlag:false },
+  { id:"P015", name:"Harish Bose",         age:56, diagnosis:"COPD",     diagnosisCode:"J44.1", dischargeDate:"2026-06-09", numMedications:8,  numDiagnoses:5, numPriorAdmissions:0, diabetesFlag:false, copdFlag:true,  chfFlag:false },
+  { id:"P016", name:"Ananya Singh",        age:48, diagnosis:"Diabetes", diagnosisCode:"E11.9", dischargeDate:"2026-06-20", numMedications:7,  numDiagnoses:4, numPriorAdmissions:0, diabetesFlag:true,  copdFlag:false, chfFlag:false },
+  { id:"P017", name:"Prakash Reddy",       age:61, diagnosis:"CHF",      diagnosisCode:"I50.0", dischargeDate:"2026-06-08", numMedications:10, numDiagnoses:6, numPriorAdmissions:1, diabetesFlag:false, copdFlag:false, chfFlag:true  },
+  { id:"P018", name:"Usha Krishnamurthy",  age:69, diagnosis:"PostSurg", diagnosisCode:"Z96.9", dischargeDate:"2026-06-13", numMedications:8,  numDiagnoses:5, numPriorAdmissions:0, diabetesFlag:false, copdFlag:false, chfFlag:false },
+  { id:"P019", name:"Vijay Shankar",       age:52, diagnosis:"Diabetes", diagnosisCode:"E11.9", dischargeDate:"2026-06-06", numMedications:6,  numDiagnoses:3, numPriorAdmissions:0, diabetesFlag:true,  copdFlag:false, chfFlag:false },
+  { id:"P020", name:"Radha Balakrishnan",  age:57, diagnosis:"PostSurg", diagnosisCode:"Z96.9", dischargeDate:"2026-06-10", numMedications:5,  numDiagnoses:3, numPriorAdmissions:0, diabetesFlag:false, copdFlag:false, chfFlag:false },
+  { id:"P021", name:"Naresh Choudhary",    age:44, diagnosis:"Diabetes", diagnosisCode:"E11.9", dischargeDate:"2026-06-04", numMedications:7,  numDiagnoses:3, numPriorAdmissions:0, diabetesFlag:true,  copdFlag:false, chfFlag:false },
+  { id:"P022", name:"Sarala Iyer",         age:60, diagnosis:"COPD",     diagnosisCode:"J44.1", dischargeDate:"2026-06-07", numMedications:9,  numDiagnoses:5, numPriorAdmissions:1, diabetesFlag:false, copdFlag:true,  chfFlag:false },
+  { id:"P023", name:"Dinesh Nair",         age:49, diagnosis:"PostSurg", diagnosisCode:"Z96.9", dischargeDate:"2026-06-02", numMedications:6,  numDiagnoses:3, numPriorAdmissions:0, diabetesFlag:false, copdFlag:false, chfFlag:false },
+  { id:"P024", name:"Padma Venkatesh",     age:65, diagnosis:"CHF",      diagnosisCode:"I50.0", dischargeDate:"2026-06-05", numMedications:10, numDiagnoses:6, numPriorAdmissions:1, diabetesFlag:false, copdFlag:false, chfFlag:true  },
+  { id:"P025", name:"Ramesh Joshi",        age:53, diagnosis:"Diabetes", diagnosisCode:"E11.9", dischargeDate:"2026-06-03", numMedications:8,  numDiagnoses:4, numPriorAdmissions:0, diabetesFlag:true,  copdFlag:false, chfFlag:false },
+]
+
 export const PATIENT_REGISTRY: Record<string, {
   id: string; name: string; age: number; diagnosis: string
   diagnosisCode: string; dischargeDate: string; daysSinceDischarge: number
   numMedications: number; numDiagnoses: number; numPriorAdmissions: number
   diabetesFlag: boolean; copdFlag: boolean; chfFlag: boolean
-}> = {
-  P001: { id:"P001", name:"Arjun Sharma",       age:72, diagnosis:"CHF",      diagnosisCode:"I50.0", dischargeDate:"2026-06-26", daysSinceDischarge:4,  numMedications:14, numDiagnoses:8, numPriorAdmissions:2, diabetesFlag:false, copdFlag:false, chfFlag:true  },
-  P002: { id:"P002", name:"Kavitha Nair",        age:68, diagnosis:"COPD",     diagnosisCode:"J44.1", dischargeDate:"2026-06-24", daysSinceDischarge:6,  numMedications:11, numDiagnoses:7, numPriorAdmissions:1, diabetesFlag:false, copdFlag:true,  chfFlag:false },
-  P003: { id:"P003", name:"Rajan Pillai",        age:77, diagnosis:"CHF",      diagnosisCode:"I50.0", dischargeDate:"2026-06-27", daysSinceDischarge:3,  numMedications:16, numDiagnoses:9, numPriorAdmissions:3, diabetesFlag:false, copdFlag:false, chfFlag:true  },
-  P004: { id:"P004", name:"Sunita Rao",          age:64, diagnosis:"Diabetes", diagnosisCode:"E11.9", dischargeDate:"2026-06-21", daysSinceDischarge:9,  numMedications:10, numDiagnoses:5, numPriorAdmissions:1, diabetesFlag:true,  copdFlag:false, chfFlag:false },
-  P005: { id:"P005", name:"Mohan Das",           age:71, diagnosis:"COPD",     diagnosisCode:"J44.1", dischargeDate:"2026-06-23", daysSinceDischarge:7,  numMedications:12, numDiagnoses:6, numPriorAdmissions:2, diabetesFlag:false, copdFlag:true,  chfFlag:false },
-  P006: { id:"P006", name:"Priya Krishnan",      age:59, diagnosis:"CHF",      diagnosisCode:"I50.0", dischargeDate:"2026-06-18", daysSinceDischarge:12, numMedications:9,  numDiagnoses:7, numPriorAdmissions:1, diabetesFlag:false, copdFlag:false, chfFlag:true  },
-  P007: { id:"P007", name:"Venkat Iyer",         age:66, diagnosis:"CHF",      diagnosisCode:"I50.0", dischargeDate:"2026-06-25", daysSinceDischarge:5,  numMedications:13, numDiagnoses:8, numPriorAdmissions:2, diabetesFlag:false, copdFlag:false, chfFlag:true  },
-  P008: { id:"P008", name:"Lakshmi Devi",        age:74, diagnosis:"COPD",     diagnosisCode:"J44.1", dischargeDate:"2026-06-22", daysSinceDischarge:8,  numMedications:10, numDiagnoses:6, numPriorAdmissions:1, diabetesFlag:false, copdFlag:true,  chfFlag:false },
-  P009: { id:"P009", name:"Ashok Patel",         age:58, diagnosis:"Diabetes", diagnosisCode:"E11.9", dischargeDate:"2026-06-16", daysSinceDischarge:14, numMedications:8,  numDiagnoses:4, numPriorAdmissions:0, diabetesFlag:true,  copdFlag:false, chfFlag:false },
-  P010: { id:"P010", name:"Meena Agarwal",       age:62, diagnosis:"PostSurg", diagnosisCode:"Z96.9", dischargeDate:"2026-06-19", daysSinceDischarge:11, numMedications:7,  numDiagnoses:4, numPriorAdmissions:0, diabetesFlag:false, copdFlag:false, chfFlag:false },
-  P011: { id:"P011", name:"Rajesh Kumar",        age:55, diagnosis:"COPD",     diagnosisCode:"J44.1", dischargeDate:"2026-06-14", daysSinceDischarge:16, numMedications:9,  numDiagnoses:5, numPriorAdmissions:1, diabetesFlag:false, copdFlag:true,  chfFlag:false },
-  P012: { id:"P012", name:"Deepa Menon",         age:67, diagnosis:"CHF",      diagnosisCode:"I50.0", dischargeDate:"2026-06-11", daysSinceDischarge:19, numMedications:11, numDiagnoses:7, numPriorAdmissions:2, diabetesFlag:false, copdFlag:false, chfFlag:true  },
-  P013: { id:"P013", name:"Suresh Nambiar",      age:70, diagnosis:"Diabetes", diagnosisCode:"E11.9", dischargeDate:"2026-06-17", daysSinceDischarge:13, numMedications:9,  numDiagnoses:5, numPriorAdmissions:1, diabetesFlag:true,  copdFlag:false, chfFlag:false },
-  P014: { id:"P014", name:"Geetha Subramanian",  age:63, diagnosis:"PostSurg", diagnosisCode:"Z96.9", dischargeDate:"2026-06-12", daysSinceDischarge:18, numMedications:6,  numDiagnoses:4, numPriorAdmissions:0, diabetesFlag:false, copdFlag:false, chfFlag:false },
-  P015: { id:"P015", name:"Harish Bose",         age:56, diagnosis:"COPD",     diagnosisCode:"J44.1", dischargeDate:"2026-06-09", daysSinceDischarge:21, numMedications:8,  numDiagnoses:5, numPriorAdmissions:0, diabetesFlag:false, copdFlag:true,  chfFlag:false },
-  P016: { id:"P016", name:"Ananya Singh",        age:48, diagnosis:"Diabetes", diagnosisCode:"E11.9", dischargeDate:"2026-06-20", daysSinceDischarge:10, numMedications:7,  numDiagnoses:4, numPriorAdmissions:0, diabetesFlag:true,  copdFlag:false, chfFlag:false },
-  P017: { id:"P017", name:"Prakash Reddy",       age:61, diagnosis:"CHF",      diagnosisCode:"I50.0", dischargeDate:"2026-06-08", daysSinceDischarge:22, numMedications:10, numDiagnoses:6, numPriorAdmissions:1, diabetesFlag:false, copdFlag:false, chfFlag:true  },
-  P018: { id:"P018", name:"Usha Krishnamurthy",  age:69, diagnosis:"PostSurg", diagnosisCode:"Z96.9", dischargeDate:"2026-06-13", daysSinceDischarge:17, numMedications:8,  numDiagnoses:5, numPriorAdmissions:0, diabetesFlag:false, copdFlag:false, chfFlag:false },
-  P019: { id:"P019", name:"Vijay Shankar",       age:52, diagnosis:"Diabetes", diagnosisCode:"E11.9", dischargeDate:"2026-06-06", daysSinceDischarge:24, numMedications:6,  numDiagnoses:3, numPriorAdmissions:0, diabetesFlag:true,  copdFlag:false, chfFlag:false },
-  P020: { id:"P020", name:"Radha Balakrishnan",  age:57, diagnosis:"PostSurg", diagnosisCode:"Z96.9", dischargeDate:"2026-06-10", daysSinceDischarge:20, numMedications:5,  numDiagnoses:3, numPriorAdmissions:0, diabetesFlag:false, copdFlag:false, chfFlag:false },
-  P021: { id:"P021", name:"Naresh Choudhary",    age:44, diagnosis:"Diabetes", diagnosisCode:"E11.9", dischargeDate:"2026-06-04", daysSinceDischarge:26, numMedications:7,  numDiagnoses:3, numPriorAdmissions:0, diabetesFlag:true,  copdFlag:false, chfFlag:false },
-  P022: { id:"P022", name:"Sarala Iyer",         age:60, diagnosis:"COPD",     diagnosisCode:"J44.1", dischargeDate:"2026-06-07", daysSinceDischarge:23, numMedications:9,  numDiagnoses:5, numPriorAdmissions:1, diabetesFlag:false, copdFlag:true,  chfFlag:false },
-  P023: { id:"P023", name:"Dinesh Nair",         age:49, diagnosis:"PostSurg", diagnosisCode:"Z96.9", dischargeDate:"2026-06-02", daysSinceDischarge:28, numMedications:6,  numDiagnoses:3, numPriorAdmissions:0, diabetesFlag:false, copdFlag:false, chfFlag:false },
-  P024: { id:"P024", name:"Padma Venkatesh",     age:65, diagnosis:"CHF",      diagnosisCode:"I50.0", dischargeDate:"2026-06-05", daysSinceDischarge:25, numMedications:10, numDiagnoses:6, numPriorAdmissions:1, diabetesFlag:false, copdFlag:false, chfFlag:true  },
-  P025: { id:"P025", name:"Ramesh Joshi",        age:53, diagnosis:"Diabetes", diagnosisCode:"E11.9", dischargeDate:"2026-06-03", daysSinceDischarge:27, numMedications:8,  numDiagnoses:4, numPriorAdmissions:0, diabetesFlag:true,  copdFlag:false, chfFlag:false },
-}
+}> = Object.fromEntries(
+  _RAW_REGISTRY.map(r => [r.id, { ...r, daysSinceDischarge: daysSince(r.dischargeDate) }])
+)
 
 export const PATIENT_IDS = Object.keys(PATIENT_REGISTRY)
 
@@ -83,25 +96,30 @@ function _rand(): number {
   return (_rngSeed >>> 0) / 4294967296
 }
 
-function _fallbackVitals(diag: string, tier: RiskTier, n = 48) {
-  const baseSpo2 = tier === "CRITICAL" ? 89 : tier === "HIGH" ? 93 : 96
-  const baseHrv  = tier === "CRITICAL" ? 14 : tier === "HIGH" ? 24 : 38
-  const baseHr   = diag === "CHF" ? 88 : 78
-  const baseBioz = diag === "CHF" ? 405 : 420
-  const baseRr   = diag === "COPD" ? 21 : 16
-  const baseCough = diag === "COPD" ? 2 : 0.2
+function _fallbackVitals(diag: string, tier: RiskTier, n = 120) {
+  // Clinically calibrated baselines per condition + tier
+  const baseSpo2  = tier === "CRITICAL" ? 88.5 : tier === "HIGH" ? 92.5 : tier === "MEDIUM" ? 95.0 : 97.0
+  const baseHrv   = tier === "CRITICAL" ? 13   : tier === "HIGH" ? 22   : tier === "MEDIUM" ? 32   : 45
+  const baseHr    = diag === "CHF" ? 90  : diag === "COPD" ? 85  : 76
+  const baseBioz  = diag === "CHF" ? 410 : 425
+  const baseRr    = diag === "COPD" ? 22 : diag === "CHF" ? 18 : 15
+  const baseCough = diag === "COPD" ? 3  : 0.3
 
+  // Latest reading is at t=now; oldest is n*60s ago (1 reading per minute)
+  const now = Date.now()
   return Array.from({ length: n }, (_, i) => ({
-    timestamp: new Date(Date.now() - (n - i) * 30 * 60 * 1000).toISOString(),
-    minuteOffset: i * 30,
-    spo2: baseSpo2 + (_rand() - 0.5) * 2,
-    hrEcg: baseHr + (_rand() - 0.5) * 6,
-    hrPpg: baseHr + (_rand() - 0.5) * 6,
-    hrvSdnn: Math.max(5, baseHrv + (_rand() - 0.5) * 5),
-    biozOhms: baseBioz + (_rand() - 0.5) * 8 + i * (tier === "CRITICAL" ? 0.1 : 0),
-    rrImu: baseRr + (_rand() - 0.5) * 2,
-    coughCount: Math.max(0, Math.round(baseCough * (_rand() * 3))),
-    afibFlag: tier === "CRITICAL" && _rand() < 0.2 ? 1 : 0,
+    // i=0 is oldest, i=n-1 is most recent (just now)
+    timestamp: new Date(now - (n - 1 - i) * 60 * 1000).toISOString(),
+    minuteOffset: i,
+    spo2:      Math.min(100, Math.max(70, baseSpo2  + (_rand() - 0.5) * 1.8)),
+    hrEcg:     Math.max(40,             baseHr     + (_rand() - 0.5) * 8),
+    hrPpg:     Math.max(40,             baseHr     + (_rand() - 0.5) * 8),
+    hrvSdnn:   Math.max(5,              baseHrv    + (_rand() - 0.5) * 6),
+    // BioZ trends UP for CHF CRITICAL (fluid accumulation)
+    biozOhms:  baseBioz + (_rand() - 0.5) * 6 + (tier === "CRITICAL" && diag === "CHF" ? i * 0.05 : 0),
+    rrImu:     Math.max(8, Math.min(35, baseRr     + (_rand() - 0.5) * 2)),
+    coughCount: Math.max(0, Math.round(baseCough * (_rand() * 2.5))),
+    afibFlag:  tier === "CRITICAL" && _rand() < 0.25 ? 1 : 0,
   }))
 }
 
@@ -156,7 +174,8 @@ export function buildFallbackPatients(): Patient[] {
       triggeredAlerts: alerts,
       recommendedAction: actionMap[tier],
       topRiskFeatures: ["hrv_sdnn","spo2_mean","bioz_ohms_trend_24hr","afib_days_in_window","cough_sum_24hr"],
-      lastUpdated: new Date(Date.now() - Math.floor(_rand() * 10) * 60000).toISOString(),
+      // lastUpdated is real: within the last 2 minutes (simulating a recent update cycle)
+      lastUpdated: new Date(Date.now() - Math.floor(_rand() * 120) * 1000).toISOString(),
       flaggedForFollowUp: tier === "CRITICAL",
       careCoordinatorNotes: "",
       vitals,

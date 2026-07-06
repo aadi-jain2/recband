@@ -1,288 +1,386 @@
 """
-RecoverPath — Firebase Realtime Database Listener (Stub)
+RecoverPath — Production-Grade Firebase Listener
 
-Connects to Firebase, accumulates patient readings, and triggers
-risk scoring when enough data has been collected.
-
-Setup:
-  1. Download your Firebase service account JSON from:
-     Firebase Console → Project Settings → Service Accounts → Generate new private key
-  2. Save it as firebase_credentials.json in the project root (NEVER commit this file)
-  3. Copy .env.example to .env and fill in FIREBASE_DATABASE_URL
-  4. Run: python src/firebase_listener.py
+Event-driven: scores every new reading as it arrives (not polling).
+Handles:
+  - Automatic reconnection with exponential backoff
+  - Local write buffer with retry if Firebase write fails
+  - Concurrent multi-patient listening without blocking
+  - Full error logging to file
+  - MONITORING_GAP detection for stale patients
 """
 
 from __future__ import annotations
 
+import json
+import logging
 import os
+import queue
 import sys
-import time
 import threading
-from collections import defaultdict
+import time
+from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Optional
 
-# Load .env for Firebase config
-try:
-    from dotenv import load_dotenv
-    load_dotenv(Path(__file__).parent.parent / ".env")
-except ImportError:
-    pass  # python-dotenv optional
+# ── Logging ────────────────────────────────────────────────────────────────────
+LOG_DIR = Path(__file__).parent.parent / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+LOG_FILE = LOG_DIR / "firebase_listener.log"
 
-# ── Configuration ──────────────────────────────────────────────────────────────
-FIREBASE_DATABASE_URL = os.getenv("FIREBASE_DATABASE_URL", "")
-FIREBASE_CREDENTIALS_PATH = os.getenv(
-    "FIREBASE_CREDENTIALS_PATH",
-    str(Path(__file__).parent.parent / "firebase_credentials.json"),
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
+    handlers=[
+        logging.FileHandler(LOG_FILE),
+        logging.StreamHandler(sys.stdout),
+    ],
 )
-
-SCORE_EVERY_N_READINGS = 60    # 1 hour of data (60 readings × 60s = 1hr)
-FULL_WINDOW_READINGS = 1440    # 24 hours
-
-MODELS_DIR = Path(__file__).parent.parent / "models"
+log = logging.getLogger("recoverpath.listener")
 
 
-# ── Firebase Admin SDK initialization ─────────────────────────────────────────
+# ── Firebase init ──────────────────────────────────────────────────────────────
 
-def init_firebase():
-    """
-    Initialize Firebase Admin SDK.
-    Requires FIREBASE_DATABASE_URL env variable and credentials JSON file.
-    """
+def _init_firebase() -> Optional[Any]:
+    """Initialize Firebase Admin SDK. Returns db reference or None."""
     try:
         import firebase_admin
-        from firebase_admin import credentials, db
+        from firebase_admin import credentials, db as firebase_db
+
+        cred_path = os.environ.get("FIREBASE_CREDENTIALS_PATH", "firebase-credentials.json")
+        db_url    = os.environ.get("FIREBASE_DATABASE_URL", "")
+
+        if not db_url:
+            log.warning("FIREBASE_DATABASE_URL not set — listener will not connect")
+            return None
 
         if not firebase_admin._apps:
-            cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
-            firebase_admin.initialize_app(cred, {
-                "databaseURL": FIREBASE_DATABASE_URL,
-            })
-            print(f"[Firebase] Initialized with URL: {FIREBASE_DATABASE_URL}")
-        return db
-    except ImportError:
-        print("[Firebase] firebase-admin not installed. Run: pip install firebase-admin")
-        return None
+            cred = credentials.Certificate(cred_path)
+            firebase_admin.initialize_app(cred, {"databaseURL": db_url})
+
+        return firebase_db
     except Exception as e:
-        print(f"[Firebase] Initialization failed: {e}")
-        print("  → Check FIREBASE_DATABASE_URL and firebase_credentials.json")
+        log.error("Firebase init failed: %s", e)
         return None
 
 
-# ── Risk Engine loader ─────────────────────────────────────────────────────────
+# ── Local write buffer ─────────────────────────────────────────────────────────
 
-def load_risk_engine():
-    """Load the RecoverPath inference engine."""
-    sys.path.insert(0, str(Path(__file__).parent))
-    from inference import RecoverPathRiskEngine
+class _WriteBuffer:
+    """Thread-safe buffer for failed Firebase writes. Retries with backoff."""
 
-    engine = RecoverPathRiskEngine()
-    try:
-        engine.load_models(str(MODELS_DIR))
-        print("[Engine] Risk engine loaded successfully.")
-        return engine
-    except Exception as e:
-        print(f"[Engine] Could not load models: {e}")
-        print("  → Run src/train.py to generate models first.")
-        return None
+    MAX_SIZE = 5000
+
+    def __init__(self, db_module: Any) -> None:
+        self._buf: deque = deque(maxlen=self.MAX_SIZE)
+        self._db = db_module
+        self._lock = threading.Lock()
+        self._thread = threading.Thread(target=self._retry_loop, daemon=True)
+        self._thread.start()
+
+    def push(self, path: str, data: dict) -> None:
+        with self._lock:
+            self._buf.append((path, data, time.time()))
+        log.debug("Buffered write to %s (buffer size=%d)", path, len(self._buf))
+
+    def _retry_loop(self) -> None:
+        while True:
+            time.sleep(30)
+            if not self._buf:
+                continue
+            with self._lock:
+                items = list(self._buf)
+                self._buf.clear()
+            retried, failed = 0, 0
+            for path, data, ts in items:
+                try:
+                    self._db.reference(path).set(data)
+                    retried += 1
+                except Exception as e:
+                    failed += 1
+                    with self._lock:
+                        self._buf.append((path, data, ts))
+                    log.warning("Retry write failed for %s: %s", path, e)
+            if retried:
+                log.info("Buffer retry: %d succeeded, %d still pending", retried, failed)
 
 
-# ── Patient reading buffer ─────────────────────────────────────────────────────
+# ── Patient reading buffer (rolling 24h window) ────────────────────────────────
 
 class PatientBuffer:
-    """Thread-safe rolling buffer of raw readings per patient."""
+    """Thread-safe rolling buffer of 1440 readings (24h @ 1/min)."""
 
-    def __init__(self, max_size: int = FULL_WINDOW_READINGS):
-        self._buffers: dict[str, list[dict]] = defaultdict(list)
+    MAX_READINGS = 1440
+
+    def __init__(self, patient_id: str) -> None:
+        self.patient_id = patient_id
+        self._readings: deque = deque(maxlen=self.MAX_READINGS)
         self._lock = threading.Lock()
-        self._max_size = max_size
 
-    def add(self, patient_id: str, reading: dict) -> int:
-        """Add a reading; returns current buffer size."""
+    def add(self, reading: dict) -> None:
         with self._lock:
-            buf = self._buffers[patient_id]
-            buf.append(reading)
-            if len(buf) > self._max_size:
-                buf.pop(0)  # sliding window
-            return len(buf)
+            self._readings.append(reading)
 
-    def get(self, patient_id: str) -> list[dict]:
+    def get_all(self) -> list[dict]:
         with self._lock:
-            return list(self._buffers[patient_id])
+            return list(self._readings)
 
-    def clear(self, patient_id: str):
+    def count(self) -> int:
         with self._lock:
-            self._buffers[patient_id].clear()
+            return len(self._readings)
 
 
-# ── Firebase listener callbacks ────────────────────────────────────────────────
+# ── Per-patient listener ───────────────────────────────────────────────────────
 
 class PatientReadingListener:
     """
-    Listens to /patients/{patient_id}/readings/ and triggers scoring.
-
-    Firebase path structure expected:
-      /patients/{patient_id}/readings/{timestamp}/
-        spo2_pct: float
-        hr_ppg_bpm: float
-        hr_ecg_bpm: float
-        hrv_sdnn_ms: float
-        hrv_rmssd_ms: float
-        rr_interval_ms: float
-        qt_interval_ms: float
-        afib_flag: int (0 or 1)
-        bioz_ohms: float
-        bioz_rr_bpm: float
-        thoracic_fluid_index: float
-        rr_imu_bpm: float
-        activity_score: float
-        posture_supine: int (0 or 1)
-        cough_count: int
-        wheeze_flag: int (0 or 1)
-        timestamp_unix: int
+    Listens to /patients/{id}/readings/ and scores on every new entry.
+    Event-driven — does not poll.
     """
 
     def __init__(
         self,
         patient_id: str,
-        db_module,
-        buffer: PatientBuffer,
-        engine,
-    ):
+        engine: Any,          # RecoverPathRiskEngine
+        db_module: Any,
+        write_buffer: _WriteBuffer,
+        score_worker: "ScoringWorker",
+    ) -> None:
         self.patient_id = patient_id
-        self.db = db_module
-        self.buffer = buffer
-        self.engine = engine
+        self._engine = engine
+        self._db = db_module
+        self._write_buffer = write_buffer
+        self._score_worker = score_worker
+        self._buffer = PatientBuffer(patient_id)
+        self._listener_handle = None
+        self._last_key_seen: Optional[str] = None
 
-    def on_new_reading(self, event):
-        """
-        Called by Firebase SDK whenever a new reading is written.
-        """
-        if event.data is None:
-            return
-
-        reading = event.data
-        if not isinstance(reading, dict):
-            return
-
-        n = self.buffer.add(self.patient_id, reading)
-        print(f"[{self.patient_id}] Reading #{n} received "
-              f"(SpO2={reading.get('spo2_pct', '?')}, "
-              f"HR={reading.get('hr_ppg_bpm', '?')})")
-
-        should_score = (n % SCORE_EVERY_N_READINGS == 0) or (n >= FULL_WINDOW_READINGS)
-        if should_score and self.engine:
-            self._run_scoring()
-
-    def _run_scoring(self):
-        records = self.buffer.get(self.patient_id)
-        print(f"[{self.patient_id}] Scoring with {len(records)} readings …")
+    def start(self) -> None:
+        path = f"patients/{self.patient_id}/readings"
         try:
-            result = self.engine.score_from_firebase_stream(
-                records, patient_id=self.patient_id
-            )
-            self._write_risk_score(result)
+            ref = self._db.reference(path)
+            self._listener_handle = ref.listen(self._on_new_data)
+            log.info("Listener started for %s at %s", self.patient_id, path)
         except Exception as e:
-            print(f"[{self.patient_id}] Scoring error: {e}")
+            log.error("Failed to start listener for %s: %s", self.patient_id, e)
 
-    def _write_risk_score(self, result: dict):
-        """Write risk score result back to Firebase."""
-        path = f"patients/{self.patient_id}/risk_score"
+    def stop(self) -> None:
+        if self._listener_handle:
+            try:
+                self._listener_handle.close()
+            except Exception:
+                pass
+
+    def _on_new_data(self, event: Any) -> None:
+        """Called by Firebase SDK for each change in /readings/ subtree."""
         try:
-            ref = self.db.reference(path)
-            ref.set({
-                "risk_score": result["risk_score"],
-                "risk_tier": result["risk_tier"],
-                "risk_probability": result["risk_probability"],
-                "anomaly_scores": result["anomaly_scores"],
-                "triggered_alerts": result["triggered_alerts"],
-                "recommended_action": result["recommended_action"],
-                "top_risk_features": result["top_risk_features"],
-                "days_since_discharge": result["days_since_discharge"],
-                "scored_at": result["timestamp"],
-            })
-            print(
-                f"[{self.patient_id}] Risk score written → Firebase {path}\n"
-                f"  Tier: {result['risk_tier']}  Score: {result['risk_score']}"
+            if event.data is None:
+                return
+            if event.event_type == "put" and isinstance(event.data, dict):
+                # Single new key written
+                key = event.path.strip("/")
+                if key and key != self._last_key_seen:
+                    self._last_key_seen = key
+                    reading = event.data
+                    self._buffer.add(reading)
+                    log.debug("%s: new reading at key %s", self.patient_id, key)
+                    # Queue for scoring
+                    self._score_worker.enqueue(self.patient_id, self._buffer.get_all())
+        except Exception as e:
+            log.error("%s: error processing event: %s", self.patient_id, e)
+
+
+# ── Scoring worker (background thread) ────────────────────────────────────────
+
+class ScoringWorker:
+    """
+    Runs ML scoring in a background thread.
+    Receives (patient_id, readings_list) tasks via a queue.
+    Writes results back to Firebase.
+    """
+
+    SCORE_EVERY_N = 1    # score on every new reading for real-time updates
+
+    def __init__(self, engine: Any, db_module: Any, write_buffer: _WriteBuffer) -> None:
+        self._engine = engine
+        self._db = db_module
+        self._write_buffer = write_buffer
+        self._queue: queue.Queue = queue.Queue(maxsize=500)
+        self._counts: dict[str, int] = {}
+        self._thread = threading.Thread(target=self._worker_loop, daemon=True)
+        self._thread.start()
+
+    def enqueue(self, patient_id: str, readings: list[dict]) -> None:
+        try:
+            self._queue.put_nowait((patient_id, readings))
+        except queue.Full:
+            log.warning("Scoring queue full — dropping task for %s", patient_id)
+
+    def _worker_loop(self) -> None:
+        while True:
+            try:
+                patient_id, readings = self._queue.get(timeout=5)
+            except queue.Empty:
+                continue
+
+            self._counts[patient_id] = self._counts.get(patient_id, 0) + 1
+            if self._counts[patient_id] % self.SCORE_EVERY_N != 0:
+                continue
+
+            try:
+                self._score_and_write(patient_id, readings)
+            except Exception as e:
+                log.error("Scoring error for %s: %s", patient_id, e)
+
+    def _score_and_write(self, patient_id: str, readings: list[dict]) -> None:
+        from feature_engineering import aggregate_firebase_window
+        features = aggregate_firebase_window(readings)
+        result   = self._engine.score_composite(
+            vitals_features=features,
+            patient_id=patient_id,
+        )
+        now = datetime.now(timezone.utc).isoformat()
+        payload = {**result, "scored_at": now, "reading_count": len(readings)}
+
+        path = f"patients/{patient_id}/risk_assessment"
+        try:
+            self._db.reference(path).set(payload)
+            log.info(
+                "%s scored: %.1f (%s) from %d readings",
+                patient_id, result["risk_score"], result["risk_tier"], len(readings)
             )
         except Exception as e:
-            print(f"[{self.patient_id}] Failed to write score to Firebase: {e}")
+            log.error("Firebase write failed for %s: %s — buffering", patient_id, e)
+            self._write_buffer.push(path, payload)
 
 
-# ── Multi-patient listener ─────────────────────────────────────────────────────
+# ── Main service ───────────────────────────────────────────────────────────────
 
 class RecoverPathFirebaseService:
     """
-    Manages listeners for all active patients.
-
-    Usage:
-      service = RecoverPathFirebaseService()
-      service.start(patient_ids=["P001", "P002"])
-      service.run_forever()
+    Multi-patient listener manager with automatic reconnection.
     """
 
-    def __init__(self):
-        self.db = init_firebase()
-        self.engine = load_risk_engine()
-        self.buffer = PatientBuffer()
-        self._listeners: list = []
+    RECONNECT_BASE_S  = 5
+    RECONNECT_MAX_S   = 300   # 5 min ceiling on backoff
+    STALE_CHECK_S     = 120   # check for stale patients every 2 min
 
-    def start(self, patient_ids: list[str]):
-        if self.db is None:
-            print("[Service] Firebase not initialized. Listener cannot start.")
-            return
+    def __init__(self, patient_ids: list[str]) -> None:
+        self.patient_ids = patient_ids
+        self._db = None
+        self._engine = None
+        self._listeners: dict[str, PatientReadingListener] = {}
+        self._write_buffer: Optional[_WriteBuffer] = None
+        self._score_worker: Optional[ScoringWorker] = None
+        self._running = False
+        self._reconnect_delay = self.RECONNECT_BASE_S
 
-        for pid in patient_ids:
-            path = f"patients/{pid}/readings"
-            try:
-                ref = self.db.reference(path)
-                listener_obj = PatientReadingListener(
-                    pid, self.db, self.buffer, self.engine
+    def _load_engine(self) -> None:
+        sys.path.insert(0, str(Path(__file__).parent))
+        from inference import RecoverPathRiskEngine
+        model_dir = Path(__file__).parent.parent / "models"
+        self._engine = RecoverPathRiskEngine()
+        self._engine.load_models(str(model_dir))
+        log.info("ML engine loaded")
+
+    def _connect(self) -> bool:
+        self._db = _init_firebase()
+        if self._db is None:
+            return False
+        self._write_buffer = _WriteBuffer(self._db)
+        self._score_worker = ScoringWorker(self._engine, self._db, self._write_buffer)
+        return True
+
+    def _start_listeners(self) -> None:
+        for pid in self.patient_ids:
+            if pid not in self._listeners:
+                listener = PatientReadingListener(
+                    pid, self._engine, self._db,
+                    self._write_buffer, self._score_worker
                 )
-                # Firebase SDK streaming listener
-                ref.listen(listener_obj.on_new_reading)
-                self._listeners.append((pid, ref))
-                print(f"[Service] Listening on /{path}")
+                listener.start()
+                self._listeners[pid] = listener
+
+    def _stop_listeners(self) -> None:
+        for listener in self._listeners.values():
+            listener.stop()
+        self._listeners.clear()
+
+    def _stale_monitor_loop(self) -> None:
+        """Background thread: marks patients with no data in >2h as MONITORING_GAP."""
+        while self._running:
+            time.sleep(self.STALE_CHECK_S)
+            if self._db is None:
+                continue
+            for pid in self.patient_ids:
+                last_ref = self._db.reference(f"patients/{pid}/latest_reading/timestamp")
+                try:
+                    ts_str = last_ref.get()
+                    if ts_str:
+                        ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                        elapsed = (datetime.now(timezone.utc) - ts).total_seconds()
+                        if elapsed > 7200:
+                            log.warning("%s: MONITORING GAP — last reading %dh ago", pid, int(elapsed/3600))
+                            gap_ref = self._db.reference(f"patients/{pid}/monitoring_status")
+                            gap_ref.set({
+                                "status": "MONITORING_GAP",
+                                "last_seen": ts_str,
+                                "elapsed_seconds": elapsed,
+                            })
+                except Exception as e:
+                    log.debug("Stale check error for %s: %s", pid, e)
+
+    def run(self) -> None:
+        """Main entry point. Blocks forever, reconnecting on failure."""
+        self._load_engine()
+        self._running = True
+
+        stale_thread = threading.Thread(target=self._stale_monitor_loop, daemon=True)
+        stale_thread.start()
+
+        while self._running:
+            log.info("Connecting to Firebase …")
+            connected = self._connect()
+            if not connected:
+                log.error(
+                    "Firebase unavailable. Retrying in %ds …",
+                    self._reconnect_delay
+                )
+                time.sleep(self._reconnect_delay)
+                self._reconnect_delay = min(self._reconnect_delay * 2, self.RECONNECT_MAX_S)
+                continue
+
+            self._reconnect_delay = self.RECONNECT_BASE_S  # reset backoff on success
+            log.info("Firebase connected. Starting %d patient listeners …", len(self.patient_ids))
+            self._start_listeners()
+
+            # Keep alive — SDK handles events in background threads
+            try:
+                while self._running:
+                    time.sleep(30)
+                    log.debug("Listener heartbeat — %d patients active", len(self._listeners))
             except Exception as e:
-                print(f"[Service] Failed to start listener for {pid}: {e}")
+                log.error("Listener loop error: %s — reconnecting", e)
+                self._stop_listeners()
 
-    def run_forever(self):
-        print("[Service] RecoverPath Firebase listener running. Press Ctrl+C to stop.")
-        try:
-            while True:
-                time.sleep(5)
-        except KeyboardInterrupt:
-            print("[Service] Shutting down.")
+    def stop(self) -> None:
+        self._running = False
+        self._stop_listeners()
 
 
-# ── .env.example generator ────────────────────────────────────────────────────
-
-def create_env_example():
-    env_example = Path(__file__).parent.parent / ".env.example"
-    if not env_example.exists():
-        env_example.write_text(
-            "# RecoverPath Firebase Configuration\n"
-            "FIREBASE_DATABASE_URL=https://your-project-default-rtdb.firebaseio.com\n"
-            "FIREBASE_CREDENTIALS_PATH=firebase_credentials.json\n"
-        )
-        print(f"[Setup] Created {env_example}")
-
-
-# ── Main ──────────────────────────────────────────────────────────────────────
+# ── CLI ────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    create_env_example()
+    import argparse
+    parser = argparse.ArgumentParser(description="RecoverPath Firebase Listener")
+    parser.add_argument("--patients", nargs="+", default=[f"P{str(i).zfill(3)}" for i in range(1, 26)])
+    args = parser.parse_args()
 
-    if not FIREBASE_DATABASE_URL:
-        print("\n[Service] No FIREBASE_DATABASE_URL set in .env.")
-        print("  1. Create a Firebase project at https://console.firebase.google.com")
-        print("  2. Enable Realtime Database")
-        print("  3. Download service account key → firebase_credentials.json")
-        print("  4. Copy .env.example to .env and set FIREBASE_DATABASE_URL")
-        print("  5. Re-run this script")
-        sys.exit(0)
-
-    service = RecoverPathFirebaseService()
-    # Replace with real patient IDs from your Firebase project
-    service.start(patient_ids=["P001", "P002", "P003"])
-    service.run_forever()
+    log.info("RecoverPath Firebase Listener starting for %d patients …", len(args.patients))
+    service = RecoverPathFirebaseService(args.patients)
+    try:
+        service.run()
+    except KeyboardInterrupt:
+        log.info("Shutting down …")
+        service.stop()

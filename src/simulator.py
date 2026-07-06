@@ -35,6 +35,52 @@ sys.path.insert(0, str(ROOT))
 
 from inference import RecoverPathRiskEngine
 
+# ── SDOH profiles (mirrors dashboard/lib/sdoh-types.ts) ───────────────────────
+SDOH_PROFILES: dict[str, dict] = {
+    "P001": {"social_risk_score": 38, "social_risk_factors": ["No transportation","Lives alone"],                         "lives_alone": True,  "medication_cost_barrier": False, "has_transportation": False},
+    "P002": {"social_risk_score": 42, "social_risk_factors": ["Medication cost barrier","Household smoke","Low health literacy"], "lives_alone": False, "medication_cost_barrier": True,  "has_transportation": True},
+    "P003": {"social_risk_score": 68, "social_risk_factors": ["No transportation","Lives alone","Medication cost barrier","Food insecurity","Low health literacy"], "lives_alone": True,  "medication_cost_barrier": True,  "has_transportation": False},
+    "P004": {"social_risk_score": 55, "social_risk_factors": ["No transportation","Lives alone","Medication cost barrier"],  "lives_alone": True,  "medication_cost_barrier": True,  "has_transportation": False},
+    "P005": {"social_risk_score": 22, "social_risk_factors": ["Household smoke exposure"],                                  "lives_alone": False, "medication_cost_barrier": False, "has_transportation": True},
+    "P006": {"social_risk_score": 8,  "social_risk_factors": [],                                                            "lives_alone": False, "medication_cost_barrier": False, "has_transportation": True},
+    "P007": {"social_risk_score": 15, "social_risk_factors": ["No transportation"],                                         "lives_alone": False, "medication_cost_barrier": False, "has_transportation": False},
+    "P008": {"social_risk_score": 72, "social_risk_factors": ["Lives alone","Medication cost barrier","Food insecurity","Low health literacy","Language barrier","No phone access"], "lives_alone": True, "medication_cost_barrier": True, "has_transportation": True},
+    "P009": {"social_risk_score": 5,  "social_risk_factors": [],                                                            "lives_alone": False, "medication_cost_barrier": False, "has_transportation": True},
+    "P010": {"social_risk_score": 5,  "social_risk_factors": [],                                                            "lives_alone": False, "medication_cost_barrier": False, "has_transportation": True},
+    "P011": {"social_risk_score": 32, "social_risk_factors": ["No transportation","Medication cost barrier","Household smoke exposure"], "lives_alone": False, "medication_cost_barrier": True, "has_transportation": False},
+    "P012": {"social_risk_score": 28, "social_risk_factors": ["Lives alone"],                                               "lives_alone": True,  "medication_cost_barrier": False, "has_transportation": True},
+    "P013": {"social_risk_score": 12, "social_risk_factors": ["No transportation"],                                         "lives_alone": False, "medication_cost_barrier": False, "has_transportation": False},
+    "P014": {"social_risk_score": 5,  "social_risk_factors": [],                                                            "lives_alone": False, "medication_cost_barrier": False, "has_transportation": True},
+    "P015": {"social_risk_score": 30, "social_risk_factors": ["Medication cost barrier","Household smoke exposure"],         "lives_alone": False, "medication_cost_barrier": True,  "has_transportation": True},
+    "P016": {"social_risk_score": 5,  "social_risk_factors": [],                                                            "lives_alone": False, "medication_cost_barrier": False, "has_transportation": True},
+    "P017": {"social_risk_score": 62, "social_risk_factors": ["No transportation","Lives alone","Medication cost barrier","Food insecurity","Low health literacy"], "lives_alone": True, "medication_cost_barrier": True, "has_transportation": False},
+    "P018": {"social_risk_score": 5,  "social_risk_factors": [],                                                            "lives_alone": False, "medication_cost_barrier": False, "has_transportation": True},
+    "P019": {"social_risk_score": 5,  "social_risk_factors": [],                                                            "lives_alone": False, "medication_cost_barrier": False, "has_transportation": True},
+    "P020": {"social_risk_score": 8,  "social_risk_factors": [],                                                            "lives_alone": False, "medication_cost_barrier": False, "has_transportation": True},
+    "P021": {"social_risk_score": 20, "social_risk_factors": ["No transportation","Medication cost barrier"],                "lives_alone": False, "medication_cost_barrier": True,  "has_transportation": False},
+    "P022": {"social_risk_score": 35, "social_risk_factors": ["Lives alone","Household smoke exposure"],                    "lives_alone": True,  "medication_cost_barrier": False, "has_transportation": True},
+    "P023": {"social_risk_score": 5,  "social_risk_factors": [],                                                            "lives_alone": False, "medication_cost_barrier": False, "has_transportation": True},
+    "P024": {"social_risk_score": 28, "social_risk_factors": ["No transportation","Lives alone"],                           "lives_alone": True,  "medication_cost_barrier": False, "has_transportation": False},
+    "P025": {"social_risk_score": 5,  "social_risk_factors": [],                                                            "lives_alone": False, "medication_cost_barrier": False, "has_transportation": True},
+}
+
+# Adherence tiers (mirrors dashboard/lib/adherence-simulator.ts)
+ADHERENCE_TIERS: dict[str, str] = {
+    "P001":"MEDIUM","P002":"LOW",   "P003":"MEDIUM","P004":"LOW",   "P005":"MEDIUM",
+    "P006":"HIGH",  "P007":"HIGH",  "P008":"LOW",   "P009":"HIGH",  "P010":"HIGH",
+    "P011":"MEDIUM","P012":"MEDIUM","P013":"MEDIUM","P014":"HIGH",  "P015":"MEDIUM",
+    "P016":"HIGH",  "P017":"LOW",   "P018":"HIGH",  "P019":"HIGH",  "P020":"HIGH",
+    "P021":"MEDIUM","P022":"MEDIUM","P023":"HIGH",  "P024":"MEDIUM","P025":"HIGH",
+}
+
+NO_SHOW_RATES: dict[str, float] = {
+    "P001":0.20,"P002":0.30,"P003":0.15,"P004":0.35,"P005":0.15,
+    "P006":0.05,"P007":0.10,"P008":0.40,"P009":0.05,"P010":0.05,
+    "P011":0.20,"P012":0.15,"P013":0.10,"P014":0.05,"P015":0.20,
+    "P016":0.05,"P017":0.35,"P018":0.05,"P019":0.05,"P020":0.10,
+    "P021":0.15,"P022":0.20,"P023":0.05,"P024":0.25,"P025":0.05,
+}
+
 # ── Logging ────────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
@@ -44,7 +90,7 @@ logging.basicConfig(
 log = logging.getLogger("simulator")
 
 # ── Constants ──────────────────────────────────────────────────────────────────
-UPDATE_INTERVAL_S = 30   # seconds between simulation steps
+UPDATE_INTERVAL_S = 60   # seconds between simulation steps (matches real device cadence)
 RNG = np.random.default_rng(42)
 
 
@@ -111,6 +157,11 @@ class PatientRecord:
     state_ticks: int = 0        # ticks spent in current state
     critical_duration: int = 0  # remaining critical ticks
     vitals: PatientVitals = field(default_factory=PatientVitals)
+    # Behavioral state (evolves over time)
+    critical_missed_streak: int = 0
+    no_show_count: int = 0
+    overall_adherence_pct: float = 0.85  # 7-day rolling adherence
+    has_scheduled_within_7d: bool = True
 
 
 # ── 25 patient roster ──────────────────────────────────────────────────────────
@@ -178,6 +229,13 @@ def build_patients() -> list[PatientRecord]:
         pid, name, age, diag, days_out, n_meds, n_diag, n_prior, dm, copd, chf = row
         # Randomise initial state: 10% start DETERIORATING, rest STABLE
         init_state = PatientState.DETERIORATING if RNG.random() < 0.10 else PatientState.STABLE
+        # Initial adherence state
+        adh_tier = ADHERENCE_TIERS.get(pid, "MEDIUM")
+        if adh_tier == "HIGH":   init_adh = float(RNG.uniform(0.90, 0.96))
+        elif adh_tier == "MEDIUM": init_adh = float(RNG.uniform(0.70, 0.86))
+        else:                     init_adh = float(RNG.uniform(0.40, 0.66))
+        init_streak = int(RNG.integers(2, 5)) if adh_tier == "LOW" else (1 if adh_tier == "MEDIUM" and RNG.random() < 0.3 else 0)
+        init_no_show = int(RNG.integers(1, 3)) if NO_SHOW_RATES.get(pid, 0.1) > 0.25 else 0
         p = PatientRecord(
             patient_id=pid,
             name=name,
@@ -192,6 +250,10 @@ def build_patients() -> list[PatientRecord]:
             chf_flag=chf,
             state=init_state,
             vitals=_build_initial_vitals(diag, days_out),
+            overall_adherence_pct=init_adh,
+            critical_missed_streak=init_streak,
+            no_show_count=init_no_show,
+            has_scheduled_within_7d=RNG.random() > NO_SHOW_RATES.get(pid, 0.1),
         )
         patients.append(p)
     return patients
@@ -470,6 +532,9 @@ class RecoverPathSimulator:
     runs real ML model, writes to Firebase.
     """
 
+    # How recent a hardware reading must be to suppress simulation (seconds)
+    HW_PRIORITY_WINDOW_S = 90
+
     def __init__(self, dry_run: bool = False, interval: float = UPDATE_INTERVAL_S):
         self.interval = interval
         self.patients = build_patients()
@@ -478,6 +543,7 @@ class RecoverPathSimulator:
         self._running = False
         self._tick = 0
         self._risk_cache: dict[str, float] = {}  # patient_id -> last risk score
+        self._hw_skip_cache: dict[str, float] = {}  # patient_id -> last hw seen (epoch s)
 
     def start_engine(self):
         model_dir = ROOT / "models"
@@ -487,13 +553,69 @@ class RecoverPathSimulator:
         self.engine.load_models(str(model_dir))
         log.info("ML engine loaded.")
 
+    def _build_adherence_data(self, patient: PatientRecord) -> dict:
+        return {
+            "overall_pct_7d":        patient.overall_adherence_pct,
+            "critical_missed_streak":patient.critical_missed_streak,
+            "adherence_tier":        ADHERENCE_TIERS.get(patient.patient_id, "MEDIUM"),
+            "medications": [
+                {"med_name": "Furosemide",   "is_critical": True},
+                {"med_name": "Metoprolol",   "is_critical": True},
+                {"med_name": "Tiotropium",   "is_critical": True},
+                {"med_name": "Salbutamol",   "is_critical": True},
+            ] if patient.diagnosis in ("CHF","COPD") else [
+                {"med_name": "Warfarin", "is_critical": True},
+            ],
+        }
+
+    def _build_followup_data(self, patient: PatientRecord) -> dict:
+        return {
+            "no_show_rate":            NO_SHOW_RATES.get(patient.patient_id, 0.1),
+            "no_show_count":           patient.no_show_count,
+            "has_scheduled_within_7d": patient.has_scheduled_within_7d,
+        }
+
+    def _update_adherence(self, patient: PatientRecord) -> None:
+        """Stochastically update adherence each tick (60s = ~1 dose window may elapse)."""
+        adh_tier = ADHERENCE_TIERS.get(patient.patient_id, "MEDIUM")
+        # Roll for this dose window
+        roll = float(RNG.random())
+        if adh_tier == "HIGH":   threshold = float(RNG.uniform(0.90, 0.96))
+        elif adh_tier == "MEDIUM": threshold = float(RNG.uniform(0.70, 0.86))
+        else:                     threshold = float(RNG.uniform(0.40, 0.66))
+
+        dose_taken = roll < threshold
+        # Update rolling 7-day pct (exponential moving average)
+        patient.overall_adherence_pct = 0.97 * patient.overall_adherence_pct + 0.03 * (1.0 if dose_taken else 0.0)
+        patient.overall_adherence_pct = max(0.0, min(1.0, patient.overall_adherence_pct))
+
+        # Update critical missed streak (only update every ~30 ticks = once daily)
+        if self._tick % 30 == 0:
+            if not dose_taken and adh_tier != "HIGH":
+                patient.critical_missed_streak = min(7, patient.critical_missed_streak + 1)
+            elif dose_taken:
+                patient.critical_missed_streak = max(0, patient.critical_missed_streak - 1)
+
     def _score_patient(self, patient: PatientRecord) -> dict:
         features = vitals_to_features(patient)
-        result = self.engine.score_from_features(features, patient_id=patient.patient_id)
+        adherence_data = self._build_adherence_data(patient)
+        followup_data  = self._build_followup_data(patient)
+        sdoh_data      = SDOH_PROFILES.get(patient.patient_id, {})
+        result = self.engine.score_composite(
+            vitals_features=features,
+            adherence_data=adherence_data,
+            followup_data=followup_data,
+            sdoh_data=sdoh_data,
+            patient_id=patient.patient_id,
+        )
         return result
 
     def _write_patient(self, patient: PatientRecord, result: dict) -> None:
-        ts = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(timezone.utc)
+        # Human-readable ISO string — stored inside every record
+        ts = now.isoformat()
+        # Safe Firebase key: "2026-06-30T22-03-00Z" — colons replaced, chronologically sortable
+        firebase_key = now.strftime("%Y-%m-%dT%H-%M-%SZ")
         v = patient.vitals
 
         latest = {
@@ -513,16 +635,40 @@ class RecoverPathSimulator:
         }
 
         risk_assessment = {
-            "risk_score":        result["risk_score"],
-            "risk_tier":         result["risk_tier"],
-            "risk_probability":  result["risk_probability"],
-            "anomaly_scores":    result["anomaly_scores"],
-            "triggered_alerts":  result["triggered_alerts"],
-            "recommended_action":result["recommended_action"],
-            "top_risk_features": result["top_risk_features"],
-            "days_since_discharge": patient.days_since_discharge,
-            "timestamp":         ts,
-            "simulation_state":  patient.state.value,
+            "risk_score":              result["risk_score"],
+            "risk_tier":               result["risk_tier"],
+            "risk_probability":        result["risk_probability"],
+            "anomaly_scores":          result["anomaly_scores"],
+            "triggered_alerts":        result["triggered_alerts"],
+            "recommended_action":      result["recommended_action"],
+            "top_risk_features":       result["top_risk_features"],
+            "days_since_discharge":    patient.days_since_discharge,
+            "timestamp":               ts,
+            "simulation_state":        patient.state.value,
+            # Composite breakdown
+            "composite_risk_score":    result.get("composite_risk_score",  result["risk_score"]),
+            "clinical_score":          result.get("clinical_score",        result["risk_score"]),
+            "behavioral_score":        result.get("behavioral_score",      0),
+            "social_score":            result.get("social_score",          0),
+            "clinical_pct":            result.get("clinical_pct",          0.6),
+            "behavioral_pct":          result.get("behavioral_pct",        0.25),
+            "social_pct":              result.get("social_pct",            0.15),
+            "explanation":             result.get("explanation",           ""),
+            "flagged_by_nonclinical":  result.get("flagged_by_nonclinical", False),
+        }
+
+        adherence_state = {
+            "overall_pct_7d":         round(patient.overall_adherence_pct, 3),
+            "critical_missed_streak": patient.critical_missed_streak,
+            "adherence_tier":         ADHERENCE_TIERS.get(patient.patient_id, "MEDIUM"),
+            "timestamp":              ts,
+        }
+
+        followup_state = {
+            "no_show_count":           patient.no_show_count,
+            "no_show_rate":            NO_SHOW_RATES.get(patient.patient_id, 0.1),
+            "has_scheduled_within_7d": patient.has_scheduled_within_7d,
+            "timestamp":               ts,
         }
 
         # Static demographics (written once, cheap to re-write)
@@ -537,25 +683,101 @@ class RecoverPathSimulator:
             "diabetes_flag":       patient.diabetes_flag,
         }
 
+        # Tag source as simulator
+        latest["source"]      = "simulator"
+        latest["data_source"] = "simulator"
+
         base = f"patients/{patient.patient_id}"
         self.firebase.write(f"{base}/latest_reading",  latest)
         self.firebase.write(f"{base}/risk_assessment", risk_assessment)
         self.firebase.write(f"{base}/demographics",    demographics)
-        # Historical record (keyed by unix ms to keep ordered)
-        hist_key = str(int(time.time() * 1000))
-        self.firebase.write(f"{base}/readings/{hist_key}", {
-            **latest, "risk_score": result["risk_score"], "risk_tier": result["risk_tier"]
+        self.firebase.write(f"{base}/adherence",       adherence_state)
+        self.firebase.write(f"{base}/followup",        followup_state)
+        self.firebase.write(f"{base}/sdoh",            SDOH_PROFILES.get(patient.patient_id, {}))
+        # Historical record — key is safe Firebase timestamp string, chronologically sortable
+        self.firebase.write(f"{base}/readings/{firebase_key}", {
+            **latest,
+            "risk_score": result["risk_score"],
+            "risk_tier":  result["risk_tier"],
         })
+
+        # Prune old readings from Firebase (keep last 1440 = 24h @ 1/min)
+        # Only prune every 60 ticks (~once per hour) to avoid hammering Firebase
+        if not self.firebase.dry_run and self._tick % 60 == 0:
+            self._prune_old_readings(patient.patient_id)
+
+    def _prune_old_readings(self, patient_id: str) -> None:
+        """Remove readings older than 24 hours from Firebase to keep the window clean."""
+        if self.firebase.dry_run or self.firebase._db is None:
+            return
+        try:
+            cutoff = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
+            # Build the cutoff key for 24h ago
+            cutoff_dt = datetime.now(timezone.utc)
+            cutoff_dt = cutoff_dt.replace(hour=cutoff_dt.hour) 
+            from datetime import timedelta
+            cutoff_24h = (datetime.now(timezone.utc) - timedelta(hours=24)).strftime("%Y-%m-%dT%H-%M-%SZ")
+            path = f"patients/{patient_id}/readings"
+            snap = self.firebase._db.reference(path).get()
+            if not snap or not isinstance(snap, dict):
+                return
+            keys_to_delete = [k for k in snap.keys() if k < cutoff_24h]
+            if len(keys_to_delete) > 100:  # Only delete in batches to avoid rate limits
+                for k in keys_to_delete[:50]:
+                    self.firebase._db.reference(f"{path}/{k}").delete()
+        except Exception as e:
+            log.debug(f"Prune failed for {patient_id}: {e}")
 
     def _console_log(self, patient: PatientRecord, result: dict, prev_risk: float) -> None:
         tier_emoji = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}.get(result["risk_tier"], "⚪")
         arrow = "↑" if result["risk_score"] > prev_risk + 0.5 else ("↓" if result["risk_score"] < prev_risk - 0.5 else "→")
         top_alert = result["triggered_alerts"][0] if result["triggered_alerts"] else "All clear"
+        c = result.get("clinical_score", result["risk_score"])
+        b = result.get("behavioral_score", 0)
+        s = result.get("social_score", 0)
+        nonclin = " [NON-CLIN]" if result.get("flagged_by_nonclinical") else ""
         print(
             f"  {patient.patient_id} {patient.name:<22} [{patient.diagnosis:<8}] "
-            f"{patient.state.value:<14} | Risk: {prev_risk:5.1f} {arrow} {result['risk_score']:5.1f} "
-            f"{tier_emoji} {result['risk_tier']:<8} | {top_alert[:60]}"
+            f"{patient.state.value:<14} | {prev_risk:5.1f}{arrow}{result['risk_score']:5.1f} "
+            f"{tier_emoji} {result['risk_tier']:<8} | C:{c:4.0f} B:{b:4.0f} S:{s:4.0f}{nonclin} | {top_alert[:50]}"
         )
+
+    def _has_recent_hardware_reading(self, patient_id: str) -> bool:
+        """
+        Returns True if this patient's latest_reading was written by a real ESP32
+        within the last HW_PRIORITY_WINDOW_S seconds.
+        Real hardware wins — simulator skips this patient automatically.
+        """
+        if self.firebase.dry_run or self.firebase._db is None:
+            return False
+        # Check in-memory cache first to avoid hammering Firebase
+        last_hw = self._hw_skip_cache.get(patient_id, 0.0)
+        if time.time() - last_hw < self.HW_PRIORITY_WINDOW_S:
+            return True
+        # Occasionally re-check Firebase (every 3 ticks = 3 minutes)
+        if self._tick % 3 != 0:
+            return False
+        try:
+            ref  = self.firebase._db.reference(f"patients/{patient_id}/latest_reading")
+            data = ref.get()
+            if not data:
+                return False
+            source = data.get("source", "simulator")
+            if source not in ("esp32_live", "hardware"):
+                return False
+            ts_str = data.get("timestamp", "")
+            if not ts_str:
+                return False
+            from datetime import timezone as tz
+            ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+            elapsed = (datetime.now(timezone.utc) - ts).total_seconds()
+            if elapsed < self.HW_PRIORITY_WINDOW_S:
+                self._hw_skip_cache[patient_id] = time.time()
+                log.info(f"[HW] {patient_id} has live hardware data ({elapsed:.0f}s ago) — skipping sim")
+                return True
+        except Exception as e:
+            log.debug(f"HW check failed for {patient_id}: {e}")
+        return False
 
     def step(self) -> None:
         """Run one simulation step for all patients."""
@@ -569,21 +791,29 @@ class RecoverPathSimulator:
         for patient in self.patients:
             prev_risk = self._risk_cache.get(patient.patient_id, 0.0)
 
+            # Skip patients that have a real ESP32 sending live data
+            if self._has_recent_hardware_reading(patient.patient_id):
+                print(f"  {patient.patient_id} {patient.name:<22} [HW] 🟢 LIVE DEVICE — simulator skipped")
+                continue
+
             # 1. Update vitals
             update_vitals(patient)
 
-            # 2. Score with real ML
+            # 2. Update adherence state
+            self._update_adherence(patient)
+
+            # 3. Score with real ML (composite)
             result = self._score_patient(patient)
             current_risk = result["risk_score"]
             self._risk_cache[patient.patient_id] = current_risk
 
-            # 3. Advance state machine
+            # 4. Advance state machine
             advance_state(patient, current_risk)
 
-            # 4. Write to Firebase
+            # 5. Write to Firebase (vitals + composite risk + adherence + SDOH)
             self._write_patient(patient, result)
 
-            # 5. Console output
+            # 6. Console output
             self._console_log(patient, result, prev_risk)
 
     def run(self) -> None:

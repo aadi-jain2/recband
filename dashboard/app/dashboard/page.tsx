@@ -2,271 +2,302 @@
 import { useState, useMemo } from "react"
 import Link from "next/link"
 import {
-  Users, AlertTriangle, TrendingUp, Activity,
-  Search, ChevronUp, ChevronDown, Flag, ExternalLink, RefreshCw,
+  Search, ChevronUp, ChevronDown, ExternalLink,
+  Heart, Pill, Home, AlertTriangle,
 } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import { RiskBadge } from "@/components/dashboard/risk-badge"
 import { usePatients, useStats } from "@/lib/use-patient-data"
-import { formatRelativeTime } from "@/lib/utils"
+import { PatientTableSkeleton } from "@/components/dashboard/skeletons"
+import { cn } from "@/lib/utils"
+import { formatRelativeTime, formatClockTime } from "@/lib/time-utils"
+import { useLiveMinute } from "@/lib/use-live-time"
 import type { RiskTier } from "@/lib/types"
+import { SDOH_PROFILES } from "@/lib/sdoh-types"
+import { getAllAdherence } from "@/lib/adherence-simulator"
+import { PATIENT_REGISTRY } from "@/lib/mock-data"
 
 type SortKey = "riskScore" | "daysSinceDischarge" | "name" | "riskTier"
-type SortDir = "asc" | "desc"
+type SortDir  = "asc" | "desc"
 
 const TIER_ORDER: Record<RiskTier, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 }
+const ALL_ADHERENCE = getAllAdherence(PATIENT_REGISTRY)
+
+function getRiskColor(tier: RiskTier) {
+  switch (tier) {
+    case "CRITICAL": return "text-red-600"
+    case "HIGH":     return "text-orange-600"
+    case "MEDIUM":   return "text-yellow-700"
+    case "LOW":      return "text-green-700"
+  }
+}
 
 export default function PatientOverviewPage() {
   const { patients, loading } = usePatients()
   const stats = useStats()
+  useLiveMinute()
 
-  const [search, setSearch] = useState("")
+  const [search,     setSearch]     = useState("")
   const [tierFilter, setTierFilter] = useState<RiskTier | "ALL">("ALL")
-  const [daysFilter, setDaysFilter] = useState<number | null>(null)
-  const [sortKey, setSortKey] = useState<SortKey>("riskScore")
-  const [sortDir, setSortDir] = useState<SortDir>("desc")
-  const [flagged, setFlagged] = useState<Set<string>>(new Set())
+  const [sortKey,    setSortKey]    = useState<SortKey>("riskScore")
+  const [sortDir,    setSortDir]    = useState<SortDir>("desc")
+  const [nonClinical, setNonClinical] = useState(false)
 
-  const filtered = useMemo(() => {
-    let list = [...patients]
-    if (search) {
-      const q = search.toLowerCase()
-      list = list.filter(p => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q))
-    }
-    if (tierFilter !== "ALL") list = list.filter(p => p.riskTier === tierFilter)
-    if (daysFilter !== null) list = list.filter(p => p.daysSinceDischarge <= daysFilter)
-    list.sort((a, b) => {
-      let cmp = 0
-      if (sortKey === "riskScore")          cmp = a.riskScore - b.riskScore
-      else if (sortKey === "daysSinceDischarge") cmp = a.daysSinceDischarge - b.daysSinceDischarge
-      else if (sortKey === "name")          cmp = a.name.localeCompare(b.name)
-      else if (sortKey === "riskTier")      cmp = TIER_ORDER[a.riskTier] - TIER_ORDER[b.riskTier]
-      return sortDir === "asc" ? cmp : -cmp
-    })
-    return list
-  }, [patients, search, tierFilter, daysFilter, sortKey, sortDir])
-
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc")
+  const handleSort = (key: SortKey) => {
+    if (key === sortKey) setSortDir(d => d === "asc" ? "desc" : "asc")
     else { setSortKey(key); setSortDir("desc") }
   }
 
-  const SortIcon = ({ k }: { k: SortKey }) => {
-    if (sortKey !== k) return <ChevronUp className="h-3 w-3 opacity-30" />
-    return sortDir === "asc"
-      ? <ChevronUp className="h-3 w-3 text-[#0F4C81]" />
-      : <ChevronDown className="h-3 w-3 text-[#0F4C81]" />
-  }
+  const filtered = useMemo(() => {
+    let rows = [...patients]
+    if (search) {
+      const q = search.toLowerCase()
+      rows = rows.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        p.id.toLowerCase().includes(q) ||
+        p.diagnosis.toLowerCase().includes(q)
+      )
+    }
+    if (tierFilter !== "ALL") rows = rows.filter(p => p.riskTier === tierFilter)
+    if (nonClinical) rows = rows.filter(p => p.compositeRisk?.flagged_by_nonclinical)
+    rows.sort((a, b) => {
+      let av: number, bv: number
+      switch (sortKey) {
+        case "riskTier":           av = TIER_ORDER[a.riskTier]; bv = TIER_ORDER[b.riskTier]; break
+        case "daysSinceDischarge": av = a.daysSinceDischarge;   bv = b.daysSinceDischarge;   break
+        case "name":               return sortDir === "asc"
+          ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)
+        default:                   av = a.riskScore; bv = b.riskScore
+      }
+      return sortDir === "asc" ? av - bv : bv - av
+    })
+    return rows
+  }, [patients, search, tierFilter, nonClinical, sortKey, sortDir])
 
-  const statCards = [
-    { label: "Total Patients",    value: stats.totalPatients,  icon: Users,          color: "text-[#0F4C81] bg-blue-50" },
-    { label: "CRITICAL",          value: stats.criticalCount,  icon: AlertTriangle,  color: "text-red-600 bg-red-50" },
-    { label: "HIGH Risk",         value: stats.highCount,      icon: TrendingUp,     color: "text-orange-600 bg-orange-50" },
-    { label: "Avg Risk Score",    value: stats.avgRiskScore,   icon: Activity,       color: "text-[#00B4A6] bg-teal-50" },
-  ]
+  const SortIcon = ({ col }: { col: SortKey }) =>
+    sortKey !== col
+      ? <ChevronDown className="h-3 w-3 opacity-30 inline ml-0.5" />
+      : sortDir === "desc"
+        ? <ChevronDown className="h-3 w-3 inline ml-0.5" />
+        : <ChevronUp   className="h-3 w-3 inline ml-0.5" />
+
+  const nonClinCount = patients.filter(p => p.compositeRisk?.flagged_by_nonclinical).length
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Patient Overview</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Live 24-hour monitoring — {patients.length} patients enrolled</p>
-        </div>
-        <Button variant="outline" size="sm" className="gap-2">
-          <RefreshCw className="h-3.5 w-3.5" /> Refresh
-        </Button>
+    <div className="flex h-full flex-col">
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="border-b border-[#E5E7EB] bg-white px-6 py-4">
+        <h1 className="text-base font-semibold text-[#111827]">Patient Monitor</h1>
+        <p className="text-xs text-[#6B7280] mt-0.5">
+          {stats.totalPatients} patients · last updated {formatRelativeTime(new Date().toISOString())}
+        </p>
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {statCards.map(c => (
-          <Card key={c.label}>
-            <CardContent className="flex items-center gap-4 p-5">
-              <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${c.color}`}>
-                <c.icon className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
+      {/* ── Stat bar ────────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-5 border-b border-[#E5E7EB] bg-[#F9FAFB]">
+        {[
+          { label: "TOTAL",        value: stats.totalPatients,  color: "text-[#111827]" },
+          { label: "CRITICAL",     value: stats.criticalCount,  color: "text-red-600"   },
+          { label: "HIGH",         value: stats.highCount,      color: "text-orange-600"},
+          { label: "MEDIUM",       value: stats.mediumCount,    color: "text-yellow-700"},
+          { label: "NON-CLIN ⚑",  value: nonClinCount,         color: "text-orange-600"},
+        ].map(s => (
+          <div key={s.label} className="border-r border-[#E5E7EB] px-4 py-3 last:border-r-0">
+            <p className={cn("tabular text-xl font-bold", s.color)}>{loading ? "—" : s.value}</p>
+            <p className="text-[10px] font-medium uppercase tracking-wider text-[#6B7280] mt-0.5">{s.label}</p>
+          </div>
         ))}
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="flex flex-wrap items-center gap-3 p-4">
-          <div className="relative flex-1 min-w-48">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search by name or ID…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {(["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW"] as const).map(t => (
-              <button
-                key={t}
-                onClick={() => setTierFilter(t)}
-                className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
-                  tierFilter === t
-                    ? "bg-[#0F4C81] text-white border-[#0F4C81]"
-                    : "border-gray-300 text-gray-600 hover:border-gray-400"
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-          <select
-            value={daysFilter ?? ""}
-            onChange={e => setDaysFilter(e.target.value ? Number(e.target.value) : null)}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-700 focus:ring-2 focus:ring-[#0F4C81]"
-          >
-            <option value="">All discharge dates</option>
-            <option value="7">Last 7 days</option>
-            <option value="14">Last 14 days</option>
-            <option value="21">Last 21 days</option>
-          </select>
-        </CardContent>
-      </Card>
+      {/* ── Filter bar ──────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 border-b border-[#E5E7EB] bg-white px-6 py-2">
+        {/* Search */}
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#6B7280]" />
+          <input
+            type="text"
+            placeholder="Search name, ID, diagnosis …"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="h-7 w-52 rounded-[3px] border border-[#E5E7EB] bg-white pl-7 pr-3 text-xs text-[#111827] placeholder:text-[#9CA3AF] focus:border-[#2563EB] focus:outline-none"
+          />
+        </div>
 
-      {/* Table */}
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="border-b border-gray-200 bg-gray-50 dark:bg-gray-900">
-              <tr>
-                {[
-                  { label: "Patient", key: "name" as SortKey },
-                  { label: "Diagnosis", key: null },
-                  { label: "Days Out", key: "daysSinceDischarge" as SortKey },
-                  { label: "Risk Score", key: "riskScore" as SortKey },
-                  { label: "Risk Tier", key: "riskTier" as SortKey },
-                  { label: "Top Alert", key: null },
-                  { label: "Updated", key: null },
-                  { label: "Actions", key: null },
-                ].map(({ label, key }) => (
-                  <th
-                    key={label}
-                    onClick={() => key && toggleSort(key)}
-                    className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 ${key ? "cursor-pointer select-none hover:text-gray-700" : ""}`}
-                  >
-                    <span className="flex items-center gap-1">
-                      {label}
-                      {key && <SortIcon k={key} />}
-                    </span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {loading
-                ? Array.from({ length: 6 }).map((_, i) => (
-                    <tr key={i}>
-                      {Array.from({ length: 8 }).map((_, j) => (
-                        <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
-                      ))}
-                    </tr>
-                  ))
-                : filtered.map(patient => (
+        <div className="h-4 w-px bg-[#E5E7EB]" />
+
+        {/* Tier filters */}
+        {(["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW"] as const).map(t => (
+          <button
+            key={t}
+            onClick={() => setTierFilter(t)}
+            className={cn(
+              "filter-btn",
+              tierFilter === t && "active"
+            )}
+          >
+            {t}
+          </button>
+        ))}
+
+        <div className="h-4 w-px bg-[#E5E7EB]" />
+
+        <button
+          onClick={() => setNonClinical(p => !p)}
+          className={cn("filter-btn gap-1.5", nonClinical && "active")}
+        >
+          <AlertTriangle className="h-3 w-3" />
+          Non-clinical risk only
+        </button>
+
+        <span className="ml-auto text-xs text-[#6B7280] tabular">
+          {filtered.length} of {patients.length}
+        </span>
+      </div>
+
+      {/* ── Table ───────────────────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-auto">
+        <table className="clinical-table">
+          <thead>
+            <tr>
+              <th className="sortable w-8" onClick={() => handleSort("riskTier")}>
+                #
+              </th>
+              <th className="sortable" onClick={() => handleSort("name")}>
+                Patient <SortIcon col="name" />
+              </th>
+              <th>Diagnosis</th>
+              <th className="sortable" onClick={() => handleSort("riskScore")}>
+                Risk Score <SortIcon col="riskScore" />
+              </th>
+              <th>Risk Tier</th>
+              <th>Drivers</th>
+              <th className="sortable" onClick={() => handleSort("daysSinceDischarge")}>
+                Day Out <SortIcon col="daysSinceDischarge" />
+              </th>
+              <th>Last Alert</th>
+              <th>Updated</th>
+              <th className="w-8"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading
+              ? <PatientTableSkeleton rows={12} />
+              : filtered.map((p, idx) => {
+                  const cr    = p.compositeRisk
+                  const nonCl = cr?.flagged_by_nonclinical ?? false
+                  const cliEl = cr ? cr.clinical_score    > 50 : p.riskScore > 50
+                  const behEl = cr ? cr.behavioral_score  > 35 : false
+                  const socEl = cr ? cr.social_score      > 35 : false
+                  const alert = p.triggeredAlerts?.[0] ?? "—"
+                  const sdoh  = SDOH_PROFILES[p.id]
+
+                  return (
                     <tr
-                      key={patient.id}
-                      className={`group cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-900 ${
-                        patient.riskTier === "CRITICAL" ? "bg-red-50/40 dark:bg-red-950/20" : ""
-                      }`}
-                      onClick={() => window.location.href = `/dashboard/patient/${patient.id}`}
+                      key={p.id}
+                      className={cn(
+                        "cursor-pointer transition-colors hover:bg-[#F9FAFB]",
+                        p.riskTier === "CRITICAL" ? "row-CRITICAL" :
+                        nonCl ? "row-nonclinical" : ""
+                      )}
+                      onClick={() => window.location.href = `/dashboard/patient/${p.id}`}
                     >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#0F4C81]/10 text-[11px] font-bold text-[#0F4C81]">
-                            {patient.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900 dark:text-gray-100">{patient.name}</p>
-                            <p className="text-xs text-gray-400">{patient.id} · {patient.age}y</p>
-                          </div>
+                      {/* Row number */}
+                      <td className="text-[#9CA3AF] text-xs">{idx + 1}</td>
+
+                      {/* Patient */}
+                      <td>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium text-[#111827]">{p.name}</span>
+                          {(p.dataSource === "esp32_live" || p.dataSource === "hardware") && (
+                            <span className="relative flex h-1.5 w-1.5 flex-shrink-0" title="Live Device">
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+                              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-green-500" />
+                            </span>
+                          )}
                         </div>
+                        <div className="text-[10px] text-[#9CA3AF] tabular">{p.id} · {p.age}y</div>
                       </td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300">
-                          {patient.diagnosis}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-700 dark:text-gray-300 font-medium">
-                        {patient.daysSinceDischarge}d
-                      </td>
-                      <td className="px-4 py-3">
+
+                      {/* Diagnosis */}
+                      <td className="text-[#6B7280]">{p.diagnosis}</td>
+
+                      {/* Risk score */}
+                      <td>
                         <div className="flex items-center gap-2">
-                          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-gray-200">
+                          <span className={cn("tabular text-sm font-semibold", getRiskColor(p.riskTier))}>
+                            {Math.round(p.riskScore)}
+                          </span>
+                          <div className="risk-bar-track w-16">
                             <div
-                              className="h-full rounded-full transition-all"
+                              className="risk-bar-fill"
                               style={{
-                                width: `${patient.riskScore}%`,
-                                backgroundColor:
-                                  patient.riskScore >= 75 ? "#DC2626" :
-                                  patient.riskScore >= 50 ? "#EA580C" :
-                                  patient.riskScore >= 25 ? "#CA8A04" : "#16A34A",
+                                width: `${p.riskScore}%`,
+                                background:
+                                  p.riskTier === "CRITICAL" ? "#DC2626" :
+                                  p.riskTier === "HIGH"     ? "#D97706" :
+                                  p.riskTier === "MEDIUM"   ? "#CA8A04" :
+                                  "#16A34A",
                               }}
                             />
                           </div>
-                          <span className="font-bold text-gray-900 dark:text-gray-100 text-sm">
-                            {patient.riskScore.toFixed(0)}
-                          </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
-                        <RiskBadge tier={patient.riskTier} pulse={patient.riskTier === "CRITICAL"} />
+
+                      {/* Tier badge */}
+                      <td>
+                        <span className={cn("badge", `badge-${p.riskTier}`)}>
+                          {p.riskTier}
+                        </span>
                       </td>
-                      <td className="max-w-xs px-4 py-3">
-                        <p className="truncate text-xs text-gray-600 dark:text-gray-400">{patient.triggeredAlerts[0]}</p>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-400">
-                        {formatRelativeTime(patient.lastUpdated)}
-                      </td>
-                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center gap-2">
-                          <Link href={`/dashboard/patient/${patient.id}`}>
-                            <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs">
-                              <ExternalLink className="h-3 w-3" /> View
-                            </Button>
-                          </Link>
-                          <Button
-                            size="sm"
-                            variant={flagged.has(patient.id) ? "default" : "outline"}
-                            className="h-7 gap-1 text-xs"
-                            onClick={() => setFlagged(f => {
-                              const n = new Set(f)
-                              n.has(patient.id) ? n.delete(patient.id) : n.add(patient.id)
-                              return n
-                            })}
-                          >
-                            <Flag className="h-3 w-3" />
-                          </Button>
+
+                      {/* Risk drivers — text icons, no circles */}
+                      <td>
+                        <div className="flex items-center gap-1">
+                          {cliEl && <span title="Clinical" className="text-blue-600"><Heart   className="h-3.5 w-3.5" /></span>}
+                          {behEl && <span title="Behavioral" className="text-orange-600"><Pill className="h-3.5 w-3.5" /></span>}
+                          {socEl && <span title="Social" className="text-purple-600"><Home   className="h-3.5 w-3.5" /></span>}
+                          {!cliEl && !behEl && !socEl && <span className="text-[#9CA3AF] text-xs">—</span>}
                         </div>
+                      </td>
+
+                      {/* Days post-discharge */}
+                      <td className="tabular text-xs text-[#6B7280]">D+{p.daysSinceDischarge}</td>
+
+                      {/* Last alert */}
+                      <td className="max-w-[200px]">
+                        <p className="truncate text-xs text-[#6B7280]" title={alert}>
+                          {alert.length > 55 ? alert.slice(0, 55) + "…" : alert}
+                        </p>
+                      </td>
+
+                      {/* Updated */}
+                      <td className="tabular text-xs text-[#9CA3AF]" title={p.lastUpdated}>
+                        {formatClockTime(p.lastUpdated)}
+                        <span className="block text-[10px]">{formatRelativeTime(p.lastUpdated)}</span>
+                      </td>
+
+                      {/* Link */}
+                      <td onClick={e => e.stopPropagation()}>
+                        <Link
+                          href={`/dashboard/patient/${p.id}`}
+                          className="text-[#2563EB] hover:underline"
+                          onClick={e => e.stopPropagation()}
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Link>
                       </td>
                     </tr>
-                  ))
-              }
-            </tbody>
-          </table>
-          {!loading && filtered.length === 0 && (
-            <div className="py-12 text-center text-sm text-gray-400">
-              No patients match current filters.
-            </div>
-          )}
-        </div>
-        <div className="border-t border-gray-100 px-4 py-3 text-xs text-gray-400">
-          Showing {filtered.length} of {patients.length} patients · Auto-refreshes every 60s
-        </div>
-      </Card>
+                  )
+                })
+            }
+          </tbody>
+        </table>
+
+        {!loading && filtered.length === 0 && (
+          <div className="flex h-32 items-center justify-center text-sm text-[#9CA3AF]">
+            No patients match the current filters.
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -5,17 +5,8 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatRelativeTime(date: Date | string): string {
-  const d = typeof date === "string" ? new Date(date) : date
-  const now = new Date()
-  const diff = now.getTime() - d.getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return "just now"
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  return `${Math.floor(hrs / 24)}d ago`
-}
+// Re-export time utils so existing imports of formatRelativeTime from utils still work
+export { formatRelativeTime, formatClockTime, formatDateTime } from "./time-utils"
 
 export function getRiskColor(tier: string): string {
   switch (tier) {

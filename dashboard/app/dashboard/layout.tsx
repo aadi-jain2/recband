@@ -1,20 +1,24 @@
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { Topbar } from "@/components/dashboard/topbar"
 import { DataSourceBanner } from "@/components/dashboard/data-source-banner"
+import { MobileNav } from "@/components/dashboard/mobile-nav"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
-      <Sidebar alertCount={0} />
-      <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="flex h-screen flex-col overflow-hidden bg-white sm:flex-row">
+      {/* Sidebar — hidden below sm breakpoint */}
+      <div className="hidden sm:block">
+        <Sidebar alertCount={0} />
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar alertCount={0} />
-        <div className="flex items-center justify-end gap-3 border-b border-gray-100 bg-white px-6 py-1.5 dark:border-gray-800 dark:bg-gray-950">
-          <DataSourceBanner />
-        </div>
-        <main className="flex-1 overflow-y-auto p-6">
+        <DataSourceBanner />
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden pb-14 sm:pb-0">
           {children}
         </main>
       </div>
+      {/* Mobile bottom nav — only on small screens */}
+      <MobileNav />
     </div>
   )
 }

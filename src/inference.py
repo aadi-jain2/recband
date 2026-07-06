@@ -109,6 +109,240 @@ class RecoverPathRiskEngine:
         features = aggregate_firebase_window(records)
         return self.score_from_features(features, patient_id=patient_id)
 
+    # ── Composite scoring API ──────────────────────────────────────────────────
+
+    def score_composite(
+        self,
+        vitals_features: dict,
+        adherence_data: dict | None = None,
+        followup_data: dict | None = None,
+        sdoh_data: dict | None = None,
+        patient_id: str = "unknown",
+    ) -> dict:
+        """
+        Full composite risk score combining:
+          clinical (ML vitals model) × 0.60
+          behavioral (adherence + follow-up) × 0.25
+          social (SDOH) × 0.15
+
+        Compounding effects applied when multiple factors co-occur.
+        """
+        # ── Layer 1: clinical vitals ──
+        clinical_result = self.score_from_features(vitals_features, patient_id=patient_id)
+        clinical_score = clinical_result["risk_score"]
+
+        # ── Layer 2: behavioral risk modifier (0-100 scale) ──
+        behavioral_score = self._compute_behavioral_risk(adherence_data or {}, followup_data or {})
+
+        # ── Layer 3: social risk modifier (0-100 scale) ──
+        social_score = self._compute_social_risk(sdoh_data or {})
+
+        # ── Composite with weights (clinical 55%, behavioral 30%, social 15%) ──
+        raw_composite = (
+            clinical_score   * 0.55 +
+            behavioral_score * 0.30 +
+            social_score     * 0.15
+        )
+        composite_score = round(min(100.0, max(0.0, raw_composite)), 1)
+        tier, action = self._get_tier(composite_score)
+
+        # ── Explanation ──
+        explanation = self._generate_explanation(
+            clinical_score, behavioral_score, social_score,
+            adherence_data or {}, followup_data or {}, sdoh_data or {},
+            vitals_features=vitals_features,
+        )
+
+        # ── Additional behavioral/social alerts ──
+        extra_alerts = self._compute_behavioral_alerts(adherence_data or {}, followup_data or {}, sdoh_data or {})
+        all_alerts = extra_alerts + clinical_result["triggered_alerts"]
+
+        # Flagged by non-clinical: clinical LOW/MEDIUM but composite HIGH+
+        clinical_tier, _ = self._get_tier(clinical_score)
+        flagged_by_nonclinical = (
+            clinical_tier in ("LOW", "MEDIUM") and
+            tier in ("HIGH", "CRITICAL")
+        )
+
+        return {
+            **clinical_result,
+            "risk_score":              composite_score,
+            "risk_tier":               tier,
+            "recommended_action":      action,
+            "triggered_alerts":        all_alerts[:8],
+            # Composite breakdown
+            "composite_risk_score":    composite_score,
+            "clinical_score":          round(clinical_score, 1),
+            "behavioral_score":        round(behavioral_score, 1),
+            "social_score":            round(social_score, 1),
+            "clinical_pct":            round(clinical_score * 0.55 / max(composite_score, 1), 3),
+            "behavioral_pct":          round(behavioral_score * 0.30 / max(composite_score, 1), 3),
+            "social_pct":              round(social_score * 0.15 / max(composite_score, 1), 3),
+            "explanation":             explanation,
+            "flagged_by_nonclinical":  flagged_by_nonclinical,
+            # Data sufficiency: communicates how complete the input data is
+            "data_sufficiency":        vitals_features.get("_data_sufficiency", "full"),
+        }
+
+    @staticmethod
+    def _compute_behavioral_risk(adherence: dict, followup: dict) -> float:
+        score = 0.0
+
+        # Adherence component
+        overall_pct = float(adherence.get("overall_pct_7d", 1.0))
+        critical_streak = int(adherence.get("critical_missed_streak", 0))
+        adherence_tier = adherence.get("adherence_tier", "HIGH")
+
+        if adherence_tier == "LOW":
+            score += 30.0
+        elif adherence_tier == "MEDIUM":
+            score += 15.0
+
+        if critical_streak >= 2:
+            score += 20.0 + min(critical_streak * 2.5, 20.0)
+        elif critical_streak == 1:
+            score += 8.0
+
+        if overall_pct < 0.50:
+            score += 15.0
+        elif overall_pct < 0.70:
+            score += 8.0
+
+        # Follow-up component
+        no_show_rate = float(followup.get("no_show_rate", 0.0))
+        no_show_count = int(followup.get("no_show_count", 0))
+        has_scheduled = bool(followup.get("has_scheduled_within_7d", True))
+
+        if no_show_count >= 2:
+            score += 20.0
+        elif no_show_count == 1:
+            score += 10.0
+
+        if no_show_rate > 0.5:
+            score += 10.0
+
+        if not has_scheduled:
+            score += 8.0
+
+        # Compounding: missing meds AND no-shows together
+        if critical_streak >= 2 and no_show_count >= 1:
+            score += 15.0
+
+        return round(min(100.0, score), 1)
+
+    @staticmethod
+    def _compute_social_risk(sdoh: dict) -> float:
+        score = float(sdoh.get("social_risk_score", 0.0))
+        # Already 0-100 from pre-computed SDOH profile
+        # Apply compounding if 3+ factors
+        factors = sdoh.get("social_risk_factors", [])
+        if isinstance(factors, list) and len(factors) >= 3:
+            score = min(100.0, score + 10.0)
+        return round(score, 1)
+
+    @staticmethod
+    def _compute_behavioral_alerts(adherence: dict, followup: dict, sdoh: dict) -> list:
+        alerts = []
+        critical_streak = int(adherence.get("critical_missed_streak", 0))
+        if critical_streak >= 2:
+            meds = adherence.get("medications", [])
+            critical_meds = [m.get("med_name","") for m in meds if m.get("is_critical")]
+            med_str = ", ".join(critical_meds[:2]) if critical_meds else "critical medication"
+            alerts.append(
+                f"Missed {med_str} for {critical_streak} consecutive days — adherence risk elevated"
+            )
+
+        no_show_count = int(followup.get("no_show_count", 0))
+        if no_show_count >= 1:
+            alerts.append(f"No-showed {no_show_count} follow-up appointment(s) since discharge")
+
+        if not followup.get("has_scheduled_within_7d", True):
+            alerts.append("No follow-up appointment scheduled in next 7 days")
+
+        factors = sdoh.get("social_risk_factors", [])
+        if isinstance(factors, list) and len(factors) >= 3:
+            alerts.append(
+                f"High social risk: {len(factors)} SDOH barriers detected "
+                f"({', '.join(factors[:2])}...)"
+            )
+        elif isinstance(factors, list) and len(factors) > 0:
+            alerts.append(f"Social risk factor: {factors[0]}")
+
+        return alerts
+
+    @staticmethod
+    def _generate_explanation(
+        clinical: float, behavioral: float, social: float,
+        adherence: dict, followup: dict, sdoh: dict,
+        vitals_features: dict | None = None,
+    ) -> str:
+        """
+        Generate a clinical-note-style explanation for the composite risk score.
+        Written for care coordinators — direct, actionable, no jargon.
+        """
+        lines: list[str] = []
+        clinical_tier, _ = RecoverPathRiskEngine._get_tier(clinical)
+
+        # ── Clinical component ──
+        spo2 = (vitals_features or {}).get("spo2_mean")
+        hr   = (vitals_features or {}).get("hr_ppg_mean")
+        hrv  = (vitals_features or {}).get("hrv_sdnn")
+
+        if clinical_tier == "CRITICAL":
+            vital_str = ""
+            if spo2: vital_str += f"SpO2 {spo2:.0f}%, "
+            if hr:   vital_str += f"HR {hr:.0f}bpm"
+            vital_str = f" ({vital_str.strip(', ')})" if vital_str else ""
+            lines.append(f"Vitals in critical range{vital_str} — immediate contact required.")
+        elif clinical_tier == "HIGH":
+            vital_str = ""
+            if spo2: vital_str += f"SpO2 {spo2:.0f}%, "
+            if hr:   vital_str += f"HR {hr:.0f}bpm"
+            vital_str = f" ({vital_str.strip(', ')})" if vital_str else ""
+            lines.append(f"Vitals trending abnormal{vital_str} — contact patient today.")
+        elif clinical_tier == "MEDIUM":
+            lines.append("Vitals mildly outside normal range — monitor closely.")
+        else:
+            vital_str = ""
+            if spo2: vital_str += f"SpO2 {spo2:.0f}%, "
+            if hr:   vital_str += f"HR {hr:.0f}bpm"
+            vital_str = f" ({vital_str.strip(', ')})" if vital_str else ""
+            lines.append(f"Vitals within normal range{vital_str}.")
+
+        # ── Behavioral component ──
+        streak    = int(adherence.get("critical_missed_streak", 0))
+        no_shows  = int(followup.get("no_show_count", 0))
+        has_appt  = bool(followup.get("has_scheduled_within_7d", True))
+        if streak >= 2:
+            meds = adherence.get("medications", [])
+            cm   = [m.get("med_name", "") for m in meds if m.get("is_critical")]
+            med  = cm[0] if cm else "critical medication"
+            lines.append(
+                f"{streak} consecutive missed doses of {med} — "
+                f"recommend care coordinator call today."
+            )
+        elif streak == 1:
+            lines.append("1 missed critical medication dose — remind patient.")
+
+        if no_shows >= 2:
+            lines.append(f"Missed {no_shows} follow-up appointments since discharge.")
+        elif no_shows == 1:
+            lines.append("1 missed follow-up appointment — reschedule.")
+        if not has_appt:
+            lines.append("No follow-up appointment scheduled in next 7 days — schedule now.")
+
+        # ── Social component ──
+        factors = sdoh.get("social_risk_factors", [])
+        if isinstance(factors, list) and len(factors) >= 3:
+            lines.append(
+                f"{len(factors)} social risk factors detected "
+                f"({', '.join(factors[:2])} …) — consider social work referral."
+            )
+        elif isinstance(factors, list) and len(factors) > 0:
+            lines.append(f"Social risk: {factors[0]}.")
+
+        return " ".join(lines) if lines else "All components within normal range — continue routine monitoring."
+
     def score_from_features(
         self,
         features: dict,
@@ -159,22 +393,44 @@ class RecoverPathRiskEngine:
         # ── Top SHAP features ──
         top_features = self._get_top_shap_features(x_scaled, n=5)
 
+        # ── Data sufficiency ──
+        critical_vitals = ["spo2_mean", "hr_ppg_mean", "hrv_sdnn", "bioz_ohms_mean", "rr_imu_mean"]
+        present = [k for k in critical_vitals if features.get(k) is not None
+                   and not (isinstance(features.get(k), float) and math.isnan(features[k]))]
+        if len(present) >= 4:
+            sufficiency = "full"
+        elif len(present) >= 2:
+            sufficiency = "partial"
+        else:
+            sufficiency = "insufficient"
+
+        missing_note = ""
+        if sufficiency != "full":
+            missing = [k for k in critical_vitals if k not in present]
+            missing_note = (
+                f"Risk assessment based on {', '.join(present)} only — "
+                f"sensors not providing: {', '.join(missing)}. "
+                f"Add missing sensors for more complete assessment."
+            )
+
         return {
-            "patient_id": patient_id,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "risk_score": risk_score,
-            "risk_tier": tier,
-            "risk_probability": round(risk_prob, 4),
+            "patient_id":          patient_id,
+            "timestamp":           datetime.now(timezone.utc).isoformat(),
+            "risk_score":          risk_score,
+            "risk_tier":           tier,
+            "risk_probability":    round(risk_prob, 4),
             "anomaly_scores": {
-                "cardiac": round(anomaly_scores.get("cardiac", 0), 3),
-                "respiratory": round(anomaly_scores.get("respiratory", 0), 3),
-                "fluid": round(anomaly_scores.get("fluid", 0), 3),
-                "activity": round(anomaly_scores.get("activity", 0), 3),
+                "cardiac":         round(anomaly_scores.get("cardiac",     0), 3),
+                "respiratory":     round(anomaly_scores.get("respiratory", 0), 3),
+                "fluid":           round(anomaly_scores.get("fluid",       0), 3),
+                "activity":        round(anomaly_scores.get("activity",    0), 3),
             },
-            "triggered_alerts": alerts,
-            "recommended_action": action,
-            "top_risk_features": top_features,
+            "triggered_alerts":    alerts,
+            "recommended_action":  action,
+            "top_risk_features":   top_features,
             "days_since_discharge": int(features.get("days_since_discharge", -1) or -1),
+            "data_sufficiency":    sufficiency,
+            "data_sufficiency_note": missing_note,
         }
 
     # ── Internal helpers ───────────────────────────────────────────────────────

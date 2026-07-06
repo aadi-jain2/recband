@@ -1,150 +1,327 @@
 "use client"
 import { useState } from "react"
 import Link from "next/link"
-import { BellRing, CheckCheck, ExternalLink, Clock, Filter } from "lucide-react"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
-import { RiskBadge } from "@/components/dashboard/risk-badge"
+import {
+  CheckCheck, ExternalLink, Clock, ChevronRight,
+  AlertOctagon, AlertTriangle, Info, BellOff,
+} from "lucide-react"
 import { useAlerts } from "@/lib/use-patient-data"
-import { formatRelativeTime, cn } from "@/lib/utils"
+import { formatRelativeTime, formatDateTime } from "@/lib/time-utils"
+import { cn } from "@/lib/utils"
+import { useLiveMinute } from "@/lib/use-live-time"
+import type { Alert, RiskTier } from "@/lib/types"
 
-export default function AlertsPage() {
-  const { alerts, loading, acknowledge } = useAlerts()
-  const [showAcknowledged, setShowAcknowledged] = useState(false)
+// ── Per-tier visual config ────────────────────────────────────────────────────
+const TIER_CONFIG: Record<RiskTier, {
+  label: string; border: string; bg: string; text: string; headerBg: string; Icon: React.ElementType
+}> = {
+  CRITICAL: {
+    label: "Critical",
+    border: "border-red-200",
+    bg:     "bg-red-50",
+    text:   "text-red-700",
+    headerBg: "bg-red-600",
+    Icon:   AlertOctagon,
+  },
+  HIGH: {
+    label: "High",
+    border: "border-amber-200",
+    bg:     "bg-amber-50",
+    text:   "text-amber-700",
+    headerBg: "bg-amber-500",
+    Icon:   AlertTriangle,
+  },
+  MEDIUM: {
+    label: "Medium",
+    border: "border-yellow-200",
+    bg:     "bg-yellow-50",
+    text:   "text-yellow-700",
+    headerBg: "bg-yellow-500",
+    Icon:   Info,
+  },
+  LOW: {
+    label: "Low",
+    border: "border-green-200",
+    bg:     "bg-green-50",
+    text:   "text-green-700",
+    headerBg: "bg-green-600",
+    Icon:   Info,
+  },
+}
 
-  const visible = showAcknowledged ? alerts : alerts.filter(a => !a.acknowledged)
-  const unreadCount = alerts.filter(a => !a.acknowledged).length
+// ── Single alert card ─────────────────────────────────────────────────────────
+function AlertCard({
+  alert, confirmId, setConfirmId, acknowledge,
+}: {
+  alert: Alert
+  confirmId: string | null
+  setConfirmId: (id: string | null) => void
+  acknowledge: (id: string) => void
+}) {
+  const cfg = TIER_CONFIG[alert.riskTier]
+  const ack = alert.acknowledged
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-            <BellRing className="h-6 w-6 text-red-500" />
-            Active Alerts
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {unreadCount} unacknowledged alerts across all patients
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowAcknowledged(v => !v)}
-            className={cn(
-              "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-              showAcknowledged
-                ? "border-gray-400 bg-gray-100 text-gray-700"
-                : "border-gray-300 text-gray-500 hover:border-gray-400",
-            )}
+    <div className={cn(
+      "flex items-stretch rounded-[3px] border transition-opacity overflow-hidden",
+      cfg.border,
+      ack ? "opacity-40" : ""
+    )}>
+      {/* Severity left accent */}
+      <div className={cn("w-1 flex-shrink-0", cfg.headerBg)} />
+
+      {/* Main content */}
+      <div className="flex flex-1 items-start gap-4 p-4">
+        {/* Patient info */}
+        <div className="min-w-[160px]">
+          <Link
+            href={`/dashboard/patient/${alert.patientId}`}
+            className="group flex items-center gap-1 font-semibold text-[#111827] hover:text-[#2563EB]"
           >
-            <Filter className="h-3 w-3" />
-            {showAcknowledged ? "Hiding acknowledged" : "Show acknowledged"}
-          </button>
+            {alert.patientName}
+            <ExternalLink className="h-3 w-3 text-[#9CA3AF] opacity-0 group-hover:opacity-100 transition-opacity" />
+          </Link>
+          <p className="text-[11px] text-[#9CA3AF] mt-0.5">{alert.patientId}</p>
+          <span className={cn("mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold", cfg.bg, cfg.text)}>
+            {cfg.label}
+          </span>
+        </div>
+
+        {/* Alert message */}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-[#374151] leading-relaxed">{alert.message}</p>
+          {ack && alert.acknowledgedAt && (
+            <p className="mt-1 text-[11px] text-[#9CA3AF]">
+              Acknowledged {formatRelativeTime(alert.acknowledgedAt)}
+            </p>
+          )}
+        </div>
+
+        {/* Time */}
+        <div className="flex-shrink-0 text-right">
+          <p className="tabular text-xs font-semibold text-[#374151]">{formatRelativeTime(alert.timestamp)}</p>
+          <p className="text-[10px] text-[#9CA3AF] mt-0.5">{formatDateTime(alert.timestamp).split(",")[1]?.trim() ?? ""}</p>
         </div>
       </div>
 
-      {/* Stats bar */}
-      <div className="flex gap-4">
-        {[
-          { label: "CRITICAL", count: alerts.filter(a => a.riskTier === "CRITICAL" && !a.acknowledged).length, color: "bg-red-500" },
-          { label: "HIGH",     count: alerts.filter(a => a.riskTier === "HIGH"     && !a.acknowledged).length, color: "bg-orange-500" },
-          { label: "Acknowledged (24hr)", count: alerts.filter(a => a.acknowledged).length, color: "bg-gray-400" },
-        ].map(s => (
-          <div key={s.label} className="flex items-center gap-2">
-            <div className={`h-2.5 w-2.5 rounded-full ${s.color}`} />
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{s.count}</span>
-            <span className="text-xs text-gray-400">{s.label}</span>
-          </div>
+      {/* Action buttons */}
+      {!ack && (
+        <div className="flex flex-shrink-0 flex-col items-stretch justify-center divide-y divide-[#F3F4F6] border-l border-[#E5E7EB]">
+          <Link
+            href={`/dashboard/patient/${alert.patientId}`}
+            className="flex items-center gap-1.5 px-4 py-3 text-xs font-medium text-[#2563EB] hover:bg-[#EFF6FF] transition-colors"
+          >
+            View Patient <ChevronRight className="h-3.5 w-3.5" />
+          </Link>
+          {confirmId === alert.id ? (
+            <div className="flex">
+              <button
+                onClick={() => { acknowledge(alert.id); setConfirmId(null) }}
+                className="flex-1 px-3 py-3 text-xs font-semibold text-green-700 hover:bg-green-50 transition-colors"
+              >
+                Confirm ✓
+              </button>
+              <button
+                onClick={() => setConfirmId(null)}
+                className="flex-1 px-3 py-3 text-xs text-[#6B7280] hover:bg-[#F9FAFB] transition-colors border-l border-[#F3F4F6]"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmId(alert.id)}
+              className="flex items-center gap-1.5 px-4 py-3 text-xs text-[#6B7280] hover:bg-[#F9FAFB] transition-colors"
+            >
+              <CheckCheck className="h-3.5 w-3.5" />
+              Resolve
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Severity section ──────────────────────────────────────────────────────────
+function TierSection({
+  tier, alerts, confirmId, setConfirmId, acknowledge,
+}: {
+  tier: RiskTier
+  alerts: Alert[]
+  confirmId: string | null
+  setConfirmId: (id: string | null) => void
+  acknowledge: (id: string) => void
+}) {
+  const cfg = TIER_CONFIG[tier]
+  if (alerts.length === 0) return null
+
+  return (
+    <div>
+      {/* Section header */}
+      <div className="flex items-center gap-2 mb-2">
+        <cfg.Icon className={cn("h-4 w-4", cfg.text)} />
+        <h2 className={cn("text-sm font-bold", cfg.text)}>
+          {cfg.label} — {alerts.length} alert{alerts.length !== 1 ? "s" : ""}
+        </h2>
+        <div className="flex-1 h-px bg-[#E5E7EB]" />
+      </div>
+
+      <div className="space-y-2">
+        {alerts.map(a => (
+          <AlertCard
+            key={a.id}
+            alert={a}
+            confirmId={confirmId}
+            setConfirmId={setConfirmId}
+            acknowledge={acknowledge}
+          />
         ))}
       </div>
+    </div>
+  )
+}
 
-      {/* Alert feed */}
-      <div className="space-y-3">
-        {loading
-          ? Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-24 w-full rounded-xl" />
-            ))
-          : visible.length === 0
-          ? (
-            <Card>
-              <CardContent className="flex flex-col items-center py-16 text-gray-400">
-                <CheckCheck className="mb-3 h-10 w-10 text-green-400" />
-                <p className="text-base font-medium">All caught up</p>
-                <p className="text-sm">No unacknowledged alerts</p>
-              </CardContent>
-            </Card>
-          )
-          : visible.map(alert => (
-            <div
-              key={alert.id}
+// ═══════════════════════════════════════════════════════════════════════════════
+export default function AlertsPage() {
+  const { alerts, loading, acknowledge } = useAlerts()
+  const [showAck, setShowAck]       = useState(false)
+  const [confirmId, setConfirmId]   = useState<string | null>(null)
+  useLiveMinute()
+
+  const active  = alerts.filter(a => !a.acknowledged)
+  const acked   = alerts.filter(a =>  a.acknowledged)
+  const visible = showAck ? alerts : active
+
+  const critCount = visible.filter(a => a.riskTier === "CRITICAL").length
+  const highCount = visible.filter(a => a.riskTier === "HIGH").length
+  const medCount  = visible.filter(a => a.riskTier === "MEDIUM").length
+
+  const tierGroups: RiskTier[] = ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
+
+  return (
+    <div className="flex h-full flex-col bg-[#F9FAFB]">
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="border-b border-[#E5E7EB] bg-white px-6 py-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-base font-bold text-[#111827]">Clinical Alerts</h1>
+            <div className="mt-1 flex items-center gap-3 text-xs">
+              {active.length > 0 ? (
+                <>
+                  {critCount > 0 && <span className="font-semibold text-red-600">{critCount} CRITICAL</span>}
+                  {highCount > 0 && <span className="font-semibold text-amber-600">{highCount} HIGH</span>}
+                  {medCount  > 0 && <span className="font-semibold text-yellow-700">{medCount} MEDIUM</span>}
+                  {active.length === 0 && <span className="text-[#9CA3AF]">All clear</span>}
+                </>
+              ) : (
+                <span className="text-green-700 font-medium">All alerts resolved</span>
+              )}
+              <span className="text-[#D1D5DB]">·</span>
+              <span className="text-[#9CA3AF]">{acked.length} acknowledged</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {active.length > 0 && (
+              <button
+                onClick={() => active.forEach(a => acknowledge(a.id))}
+                className="flex items-center gap-1.5 rounded-[3px] border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-medium text-[#374151] hover:bg-[#F9FAFB] transition-colors"
+              >
+                <CheckCheck className="h-3.5 w-3.5" />
+                Acknowledge all
+              </button>
+            )}
+            <button
+              onClick={() => setShowAck(p => !p)}
               className={cn(
-                "rounded-xl border p-4 transition-all",
-                alert.acknowledged
-                  ? "border-gray-200 bg-gray-50 opacity-60 dark:border-gray-800 dark:bg-gray-900"
-                  : alert.riskTier === "CRITICAL"
-                    ? "border-red-300 bg-red-50/60 dark:border-red-800 dark:bg-red-950/20 shadow-sm"
-                    : "border-orange-200 bg-orange-50/50 dark:border-orange-800 dark:bg-orange-950/20",
+                "flex items-center gap-1.5 rounded-[3px] border px-3 py-1.5 text-xs font-medium transition-colors",
+                showAck
+                  ? "border-[#2563EB] bg-[#EFF6FF] text-[#2563EB]"
+                  : "border-[#E5E7EB] bg-white text-[#6B7280] hover:bg-[#F9FAFB]"
               )}
             >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-3 flex-1 min-w-0">
-                  {/* Pulse indicator */}
-                  {!alert.acknowledged && (
-                    <div className="relative mt-0.5 flex-shrink-0">
-                      <div className={cn(
-                        "h-2.5 w-2.5 rounded-full",
-                        alert.riskTier === "CRITICAL" ? "bg-red-500" : "bg-orange-500",
-                      )} />
-                      {alert.riskTier === "CRITICAL" && (
-                        <div className="absolute inset-0 h-2.5 w-2.5 animate-ping rounded-full bg-red-400 opacity-75" />
-                      )}
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 mb-1">
-                      <span className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
-                        {alert.patientName}
-                      </span>
-                      <span className="text-xs text-gray-400">{alert.patientId}</span>
-                      <RiskBadge tier={alert.riskTier} />
-                    </div>
-                    <p className="text-sm text-gray-700 dark:text-gray-300">{alert.message}</p>
-                    <div className="mt-1.5 flex items-center gap-1 text-xs text-gray-400">
-                      <Clock className="h-3 w-3" />
-                      {formatRelativeTime(alert.timestamp)}
-                      {alert.acknowledgedAt && (
-                        <span className="ml-2 text-green-600">
-                          · Acknowledged {formatRelativeTime(alert.acknowledgedAt)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
+              {showAck ? <><BellOff className="h-3.5 w-3.5" /> Hide acknowledged</> : "Show acknowledged"}
+            </button>
+          </div>
+        </div>
+      </div>
 
-                <div className="flex flex-shrink-0 gap-2">
-                  <Link href={`/dashboard/patient/${alert.patientId}`}>
-                    <Button size="sm" variant="outline" className="gap-1.5 text-xs h-7">
-                      <ExternalLink className="h-3 w-3" /> View Patient
-                    </Button>
-                  </Link>
-                  {!alert.acknowledged && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="gap-1.5 text-xs h-7"
-                      onClick={() => acknowledge(alert.id)}
-                    >
-                      <CheckCheck className="h-3 w-3" /> Acknowledge
-                    </Button>
-                  )}
+      {/* ── Alert list ─────────────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-auto p-5">
+        {loading ? (
+          <div className="space-y-3">
+            {[1,2,3,4,5].map(i => (
+              <div key={i} className="h-20 rounded-[3px] border border-[#E5E7EB] bg-white animate-pulse" />
+            ))}
+          </div>
+        ) : visible.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+              <CheckCheck className="h-6 w-6 text-green-600" />
+            </div>
+            <p className="text-sm font-semibold text-[#374151]">No active alerts</p>
+            <p className="text-xs text-[#9CA3AF]">All patients are within acceptable monitoring parameters.</p>
+            {acked.length > 0 && !showAck && (
+              <button
+                onClick={() => setShowAck(true)}
+                className="mt-2 text-xs text-[#2563EB] hover:underline"
+              >
+                Show {acked.length} acknowledged alert{acked.length !== 1 ? "s" : ""}
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-6 max-w-4xl">
+            {tierGroups.map(tier => (
+              <TierSection
+                key={tier}
+                tier={tier}
+                alerts={visible.filter(a => a.riskTier === tier)}
+                confirmId={confirmId}
+                setConfirmId={setConfirmId}
+                acknowledge={acknowledge}
+              />
+            ))}
+
+            {/* Acknowledged section at the bottom */}
+            {showAck && acked.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCheck className="h-4 w-4 text-[#9CA3AF]" />
+                  <h2 className="text-sm font-bold text-[#9CA3AF]">
+                    Acknowledged — {acked.length}
+                  </h2>
+                  <div className="flex-1 h-px bg-[#E5E7EB]" />
+                </div>
+                <div className="space-y-2">
+                  {acked.map(a => (
+                    <AlertCard
+                      key={a.id}
+                      alert={a}
+                      confirmId={confirmId}
+                      setConfirmId={setConfirmId}
+                      acknowledge={acknowledge}
+                    />
+                  ))}
                 </div>
               </div>
-            </div>
-          ))
-        }
+            )}
+          </div>
+        )}
       </div>
+
+      {/* ── Footer summary ─────────────────────────────────────────────────── */}
+      {!loading && alerts.length > 0 && (
+        <div className="flex items-center justify-between border-t border-[#E5E7EB] bg-white px-6 py-2 text-[11px] text-[#9CA3AF]">
+          <span>{active.length} active · {acked.length} acknowledged · {alerts.length} total</span>
+          <div className="flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            <span>Updates live</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
