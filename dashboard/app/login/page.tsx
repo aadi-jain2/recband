@@ -105,7 +105,7 @@ export default function LoginPage() {
 
             <div className="mt-4 flex flex-wrap justify-between gap-y-1 text-xs text-gray-400">
               <span>Roles: hospital_admin · care_coordinator</span>
-              <a href="/demo" className="text-[#0F4C81] hover:underline">View demo →</a>
+              <a href="/dashboard" className="text-[#0F4C81] hover:underline">Open dashboard →</a>
             </div>
           </CardContent>
         </Card>
