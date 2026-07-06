@@ -182,7 +182,7 @@ Watch the Serial Monitor. You should see:
 ### Check the dashboard
 
 1. Open `http://localhost:3000/dashboard`
-2. Click on **Arjun Sharma** (P001) — or whichever patient ID you set
+2. Click on **James Washington** (P001) — or whichever patient ID you set
 3. The patient card should show **🟢 Live Device** badge
 4. Risk score and vitals will update with your real readings within 60 seconds
 
@@ -306,7 +306,7 @@ Map your physical devices to these patient IDs in the dashboard:
 
 | Device # | `PATIENT_ID` | Patient Name | Condition |
 |----------|-------------|--------------|-----------|
-| Board 1  | `P001`      | Arjun Sharma | CHF |
+| Board 1  | `P001`      | James Washington | CHF |
 | Board 2  | `P002`      | Kavitha Nair | COPD |
 | Board 3  | `P003`      | Rajan Pillai | CHF |
 

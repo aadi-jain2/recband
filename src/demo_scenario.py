@@ -6,12 +6,12 @@ Run: python src/demo_scenario.py [--dry-run] [--fast]
 
 Timeline:
   0:00 - All 25 patients loaded, mix of stable/medium risk
-  0:30 - Arjun Sharma (P001, CHF) starts deteriorating
-  1:00 - Arjun hits HIGH risk, dashboard updates live
-  1:30 - Priya Krishnan (P006, CHF) also deteriorates
-  2:00 - Arjun hits CRITICAL — red alert fires
+  0:30 - James Washington (P001, CHF) starts deteriorating
+  1:00 - James hits HIGH risk, dashboard updates live
+  1:30 - Margaret O'Brien (P006, CHF) also deteriorates
+  2:00 - James hits CRITICAL — red alert fires
   2:30 - Alert acknowledged (auto-simulated)
-  3:00 - Arjun starts recovering (intervention worked)
+  3:00 - James starts recovering (intervention worked)
   3:30 - Kavitha Nair (P002, COPD) cough spike + wheeze
   4:00 - Three patients in HIGH/CRITICAL simultaneously
   4:30 - Population analytics shows risk distribution shift
@@ -97,7 +97,7 @@ def demo(dry_run: bool = False, fast: bool = False):
     # ══════════════════════════════════════════════════════════════════════════
     banner("Phase 0 — Baseline: 25 patients loaded", GREEN)
     phase(0, "0:00", "Establishing baseline — all patients monitored", GREEN)
-    print(f"  Patients: {len(sim.patients)} enrolled across CHF, COPD, Diabetic, Post-surgical")
+    print(f"  Patients: {len(sim.patients)} enrolled across CHF and COPD")
     print(f"  Running initial ML scoring pass…")
 
     # Force all to STABLE for clean baseline
@@ -109,10 +109,10 @@ def demo(dry_run: bool = False, fast: bool = False):
     pause(2)
 
     # ══════════════════════════════════════════════════════════════════════════
-    # Phase 1 — 0:30: Arjun Sharma starts deteriorating
+    # Phase 1 — 0:30: James Washington starts deteriorating
     # ══════════════════════════════════════════════════════════════════════════
-    banner("Phase 1 — Arjun Sharma (CHF) begins deteriorating", ORANGE)
-    phase(1, "0:30", "Arjun Sharma (P001, CHF) — bioimpedance rising, SpO2 dropping", ORANGE)
+    banner("Phase 1 — James Washington (CHF) begins deteriorating", ORANGE)
+    phase(1, "0:30", "James Washington (P001, CHF) — bioimpedance rising, SpO2 dropping", ORANGE)
 
     arjun = get_patient(sim, "P001")
     assert arjun, "P001 not found"
@@ -121,45 +121,45 @@ def demo(dry_run: bool = False, fast: bool = False):
     print(f"  {ORANGE}SpO2: {arjun.vitals.spo2:.1f}% → dropping{RESET}")
     print(f"  {ORANGE}HRV SDNN: {arjun.vitals.hrv_sdnn:.1f} ms → falling{RESET}")
 
-    run_n_steps(sim, 2, "Arjun deteriorating…")
+    run_n_steps(sim, 2, "James deteriorating…")
     pause(2)
 
     # ══════════════════════════════════════════════════════════════════════════
-    # Phase 2 — 1:00: Arjun hits HIGH risk
+    # Phase 2 — 1:00: James hits HIGH risk
     # ══════════════════════════════════════════════════════════════════════════
-    banner("Phase 2 — Arjun reaches HIGH risk tier", ORANGE)
+    banner("Phase 2 — James Washington reaches HIGH risk tier", ORANGE)
     phase(2, "1:00", "Dashboard shows orange HIGH badge — alerts triggered", ORANGE)
     run_n_steps(sim, 2, "Risk climbing…")
 
     arjun_risk = sim._risk_cache.get("P001", 0)
-    print(f"\n  {ORANGE}{BOLD}Arjun Sharma risk score: {arjun_risk:.0f} → HIGH{RESET}")
+    print(f"\n  {ORANGE}{BOLD}James Washington risk score: {arjun_risk:.0f} → HIGH{RESET}")
     print(f"  {DIM}Dashboard: orange badge visible, care coordinator notified{RESET}")
     pause(2)
 
     # ══════════════════════════════════════════════════════════════════════════
-    # Phase 3 — 1:30: Priya Krishnan also deteriorating
+    # Phase 3 — 1:30: Margaret O'Brien also deteriorating
     # ══════════════════════════════════════════════════════════════════════════
-    banner("Phase 3 — Priya Krishnan (CHF) also deteriorating", ORANGE)
+    banner("Phase 3 — Margaret O'Brien (CHF) also deteriorating", ORANGE)
     phase(3, "1:30", "Second CHF patient in distress — simultaneous deterioration", ORANGE)
 
     force_state(sim, "P006", PatientState.DETERIORATING)
     priya = get_patient(sim, "P006")
-    print(f"  {ORANGE}Priya Krishnan — CHF exacerbation developing independently{RESET}")
+    print(f"  {ORANGE}Margaret O'Brien — CHF exacerbation developing independently{RESET}")
     run_n_steps(sim, 2, "Two patients deteriorating simultaneously…")
     pause(2)
 
     # ══════════════════════════════════════════════════════════════════════════
-    # Phase 4 — 2:00: Arjun hits CRITICAL
+    # Phase 4 — 2:00: James hits CRITICAL
     # ══════════════════════════════════════════════════════════════════════════
-    banner("Phase 4 — CRITICAL ALERT: Arjun Sharma", RED)
-    phase(4, "2:00", "Arjun hits CRITICAL — immediate intervention required", RED)
+    banner("Phase 4 — CRITICAL ALERT: James Washington", RED)
+    phase(4, "2:00", "James hits CRITICAL — immediate intervention required", RED)
 
     force_state(sim, "P001", PatientState.CRITICAL_EVENT)
     run_n_steps(sim, 1, "Critical event triggered…")
 
     arjun_risk = sim._risk_cache.get("P001", 0)
     print(f"\n  {RED}{BOLD}*** CRITICAL ALERT ***{RESET}")
-    print(f"  {RED}Patient: Arjun Sharma (P001) — CHF{RESET}")
+    print(f"  {RED}Patient: James Washington (P001) — CHF{RESET}")
     print(f"  {RED}Risk Score: {arjun_risk:.0f} / 100{RESET}")
     print(f"  {RED}Action: Immediate intervention — contact patient NOW{RESET}")
     print(f"  {DIM}Dashboard: red pulsing badge, alert bell rings, alerts page highlights P001{RESET}")
@@ -169,23 +169,23 @@ def demo(dry_run: bool = False, fast: bool = False):
     # Phase 5 — 2:30: Alert acknowledged
     # ══════════════════════════════════════════════════════════════════════════
     banner("Phase 5 — Alert Acknowledged", GREEN)
-    phase(5, "2:30", "Care coordinator acknowledges Arjun's alert", GREEN)
-    print(f"  {GREEN}Care coordinator clicked 'Acknowledge' on Arjun's CRITICAL alert{RESET}")
+    phase(5, "2:30", "Care coordinator acknowledges James's alert", GREEN)
+    print(f"  {GREEN}Care coordinator clicked 'Acknowledge' on James's CRITICAL alert{RESET}")
     print(f"  {GREEN}Telemedicine call initiated — physician dispatched{RESET}")
     run_n_steps(sim, 1, "Holding critical…")
     pause(2)
 
     # ══════════════════════════════════════════════════════════════════════════
-    # Phase 6 — 3:00: Arjun recovering
+    # Phase 6 — 3:00: James recovering
     # ══════════════════════════════════════════════════════════════════════════
-    banner("Phase 6 — Arjun Sharma: Intervention Working", GREEN)
-    phase(6, "3:00", "Arjun transitions to RECOVERING — vitals improving", GREEN)
+    banner("Phase 6 — James Washington: Intervention Working", GREEN)
+    phase(6, "3:00", "James transitions to RECOVERING — vitals improving", GREEN)
 
     force_state(sim, "P001", PatientState.RECOVERING)
-    run_n_steps(sim, 2, "Arjun recovering…")
+    run_n_steps(sim, 2, "James recovering…")
 
     arjun_risk = sim._risk_cache.get("P001", 0)
-    print(f"\n  {GREEN}Arjun's risk score falling: {arjun_risk:.0f}{RESET}")
+    print(f"\n  {GREEN}James's risk score falling: {arjun_risk:.0f}{RESET}")
     print(f"  {GREEN}SpO2 recovering: {arjun.vitals.spo2:.1f}%{RESET}")
     print(f"  {GREEN}HRV SDNN improving: {arjun.vitals.hrv_sdnn:.1f} ms{RESET}")
     pause(2)
@@ -215,7 +215,7 @@ def demo(dry_run: bool = False, fast: bool = False):
     # Phase 8 — 4:00: Three HIGH/CRITICAL simultaneously
     # ══════════════════════════════════════════════════════════════════════════
     banner("Phase 8 — Peak Drama: 3 HIGH/CRITICAL Patients", RED)
-    phase(8, "4:00", "Arjun (recovering), Priya (HIGH), Kavitha (CRITICAL) — all active", RED)
+    phase(8, "4:00", "James (recovering), Margaret (HIGH), Kavitha (CRITICAL) — all active", RED)
 
     force_state(sim, "P006", PatientState.CRITICAL_EVENT)
     run_n_steps(sim, 2, "Three patients in distress…")
@@ -230,10 +230,10 @@ def demo(dry_run: bool = False, fast: bool = False):
     pause(3)
 
     # ══════════════════════════════════════════════════════════════════════════
-    # Phase 8b — THE KEY DEMO BEAT: Sunita Rao — non-clinical risk only
+    # Phase 8b — THE KEY DEMO BEAT: Patricia Johnson — non-clinical risk only
     # ══════════════════════════════════════════════════════════════════════════
-    banner("CORE DIFFERENTIATION: Sunita Rao — Normal Vitals, HIGH Risk", CYAN)
-    phase(9, "4:00+", "Sunita Rao (P004, Diabetic): vitals completely NORMAL", CYAN)
+    banner("CORE DIFFERENTIATION: Patricia Johnson — Normal Vitals, HIGH Risk", CYAN)
+    phase(9, "4:00+", "Patricia Johnson (P004, CHF): vitals completely NORMAL", CYAN)
 
     sunita = get_patient(sim, "P004")
     if sunita:
@@ -245,22 +245,22 @@ def demo(dry_run: bool = False, fast: bool = False):
         sunita.vitals.rr_imu = 16.0
         sunita.vitals.cough_sum = 2.0
         # But force high behavioral risk in the sim
-        sunita.critical_missed_streak = 4    # Missed insulin 4 days in a row
+        sunita.critical_missed_streak = 4    # Missed diuretics 4 days in a row
         sunita.no_show_count = 2              # No-showed 2 appointments
         sunita.has_scheduled_within_7d = False
         sunita.overall_adherence_pct = 0.38   # LOW adherence tier
 
-        run_n_steps(sim, 2, "Scoring Sunita with composite engine…")
+        run_n_steps(sim, 2, "Scoring Patricia with composite engine…")
         sunita_risk = sim._risk_cache.get("P004", 0)
 
         print(f"\n  {CYAN}{BOLD}*** CORE DIFFERENTIATION MOMENT ***{RESET}")
-        print(f"  {CYAN}Patient: Sunita Rao (P004) — Type 2 Diabetes{RESET}")
+        print(f"  {CYAN}Patient: Patricia Johnson (P004) — CHF{RESET}")
         print(f"  {GREEN}SpO2: {sunita.vitals.spo2:.1f}%         → NORMAL{RESET}")
         print(f"  {GREEN}HRV SDNN: {sunita.vitals.hrv_sdnn:.0f}ms     → NORMAL{RESET}")
         print(f"  {GREEN}Heart Rate: {sunita.vitals.hr_ecg:.0f} bpm    → NORMAL{RESET}")
         print(f"  {GREEN}Respiratory Rate: {sunita.vitals.rr_imu:.0f}  → NORMAL{RESET}")
         print()
-        print(f"  {RED}Missed insulin 4 days in a row{RESET}")
+        print(f"  {RED}Missed heart failure meds 4 days in a row{RESET}")
         print(f"  {RED}No-showed 2 follow-up appointments since discharge{RESET}")
         print(f"  {RED}Lives alone, no transportation, medication cost barrier{RESET}")
         print()
@@ -310,7 +310,7 @@ def demo(dry_run: bool = False, fast: bool = False):
 
     print(f"\n  {GREEN}{BOLD}Demo Complete{RESET}")
     print(f"  {GREEN}Final avg risk score:  {final_avg:.1f} (was {avg_risk:.1f}){RESET}")
-    print(f"  {GREEN}Intervention outcome:  Arjun, Kavitha, Priya all recovering{RESET}")
+    print(f"  {GREEN}Intervention outcome:  James, Kavitha, Margaret all recovering{RESET}")
     print(f"  {GREEN}False positives:       0 (specificity maintained){RESET}")
 
     print(f"""

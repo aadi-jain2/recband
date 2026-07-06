@@ -166,38 +166,39 @@ class PatientRecord:
 
 # ── 25 patient roster ──────────────────────────────────────────────────────────
 PATIENT_ROSTER = [
-    # CHF (8)
-    ("P001", "Arjun Sharma",      72, "CHF",      4,  14, 8, 2, False, False, True),
-    ("P002", "Kavitha Nair",      68, "COPD",     6,  11, 7, 1, False, True,  False),
-    ("P003", "Rajan Pillai",      77, "CHF",      3,  16, 9, 3, False, False, True),
-    ("P004", "Sunita Rao",        64, "Diabetic", 9,  10, 5, 1, True,  False, False),
-    ("P005", "Mohan Das",         71, "COPD",     7,  12, 6, 2, False, True,  False),
-    ("P006", "Priya Krishnan",    59, "CHF",      12,  9, 7, 1, False, False, True),
-    ("P007", "Venkat Iyer",       66, "CHF",      5,  13, 8, 2, False, False, True),
-    ("P008", "Lakshmi Devi",      74, "COPD",     8,  10, 6, 1, False, True,  False),
-    ("P009", "Ashok Patel",       58, "Diabetic", 14,  8, 4, 0, True,  False, False),
-    ("P010", "Meena Agarwal",     62, "PostSurg", 11,  7, 4, 0, False, False, False),
-    ("P011", "Rajesh Kumar",      55, "COPD",     16,  9, 5, 1, False, True,  False),
-    ("P012", "Deepa Menon",       67, "CHF",      19, 11, 7, 2, False, False, True),
-    ("P013", "Suresh Nambiar",    70, "Diabetic", 13,  9, 5, 1, True,  False, False),
-    ("P014", "Geetha Subramanian",63, "PostSurg", 18,  6, 4, 0, False, False, False),
-    ("P015", "Harish Bose",       56, "COPD",     21,  8, 5, 0, False, True,  False),
-    ("P016", "Ananya Singh",      48, "Diabetic", 10,  7, 4, 0, True,  False, False),
-    ("P017", "Prakash Reddy",     61, "CHF",      22, 10, 6, 1, False, False, True),
-    ("P018", "Usha Krishnamurthy",69, "PostSurg", 17,  8, 5, 0, False, False, False),
-    ("P019", "Vijay Shankar",     52, "Diabetic", 24,  6, 3, 0, True,  False, False),
-    ("P020", "Radha Balakrishnan",57, "PostSurg", 20,  5, 3, 0, False, False, False),
-    ("P021", "Naresh Choudhary",  44, "Diabetic", 26,  7, 3, 0, True,  False, False),
-    ("P022", "Sarala Iyer",       60, "COPD",     23,  9, 5, 1, False, True,  False),
-    ("P023", "Dinesh Nair",       49, "PostSurg", 28,  6, 3, 0, False, False, False),
-    ("P024", "Padma Venkatesh",   65, "CHF",      25, 10, 6, 1, False, False, True),
-    ("P025", "Ramesh Joshi",      53, "Diabetic", 27,  8, 4, 0, True,  False, False),
+    # CHF (13)
+    ("P001", "James Washington",   72, "CHF",  4,  14, 8, 2, False, False, True),
+    ("P003", "Wei Chen",           77, "CHF",  3,  16, 9, 3, False, False, True),
+    ("P004", "Patricia Johnson",   64, "CHF",  9,  10, 5, 1, False, False, True),
+    ("P006", "Margaret O'Brien",   59, "CHF",  12,  9, 7, 1, False, False, True),
+    ("P007", "Omar Hassan",        66, "CHF",  5,  13, 8, 2, False, False, True),
+    ("P010", "Yuki Tanaka",        62, "CHF",  11,  7, 4, 0, False, False, True),
+    ("P012", "Fatima Al-Rashid",   67, "CHF",  19, 11, 7, 2, False, False, True),
+    ("P014", "Nguyen Van Duc",     63, "CHF",  18,  6, 4, 0, False, False, True),
+    ("P017", "Thomas Clarke",      61, "CHF",  22, 10, 6, 1, False, False, True),
+    ("P018", "Linda Bergstrom",    69, "CHF",  17,  8, 5, 0, False, False, True),
+    ("P020", "Sophie Laurent",     57, "CHF",  20,  5, 3, 0, False, False, True),
+    ("P023", "Miguel Torres",      49, "CHF",  28,  6, 3, 0, False, False, True),
+    ("P024", "Arjun Sharma",       65, "CHF",  25, 10, 6, 1, False, False, True),
+    # COPD (12)
+    ("P002", "María González",    68, "COPD", 6,  11, 7, 1, False, True,  False),
+    ("P005", "Carlos Rivera",      71, "COPD", 7,  12, 6, 2, False, True,  False),
+    ("P008", "Elena Morales",      74, "COPD", 8,  10, 6, 1, False, True,  False),
+    ("P009", "Marcus Williams",    58, "COPD", 14,  8, 4, 0, False, True,  False),
+    ("P011", "Stefan Mueller",     55, "COPD", 16,  9, 5, 1, False, True,  False),
+    ("P013", "Claire Dubois",      70, "COPD", 13,  9, 5, 1, False, True,  False),
+    ("P015", "Rosa Santos",        56, "COPD", 21,  8, 5, 0, False, True,  False),
+    ("P016", "Min-jun Park",       48, "COPD", 10,  7, 4, 0, False, True,  False),
+    ("P019", "Andre Thompson",     52, "COPD", 24,  6, 3, 0, False, True,  False),
+    ("P021", "David Okonkwo",      44, "COPD", 26,  7, 3, 0, False, True,  False),
+    ("P022", "Rebecca Stone",      60, "COPD", 23,  9, 5, 1, False, True,  False),
+    ("P025", "Kavitha Nair",       53, "COPD", 27,  8, 4, 0, False, True,  False),
 ]
 
 
 def _build_initial_vitals(diag: str, days_out: int) -> PatientVitals:
     """Build starting vitals with small random offset from baseline."""
-    base = DIAGNOSIS_BASELINES.get(diag, DIAGNOSIS_BASELINES["PostSurg"])
+    base = DIAGNOSIS_BASELINES.get(diag, DIAGNOSIS_BASELINES["CHF"])
     jitter = lambda v, pct=0.05: v + RNG.normal(0, v * pct)
     cough_base = 4.0 if diag == "COPD" else 1.0
     bioz = jitter(base["bioz_ohms"])

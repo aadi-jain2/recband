@@ -34,7 +34,7 @@
 #define FIREBASE_AUTH   "YOUR_DATABASE_SECRET"           // Legacy secret OR ID token             UPDATE THIS
 
 // Which patient this device maps to (must match one of P001–P025 in the dashboard)
-#define PATIENT_ID      "P001"   // UPDATE THIS — P001 = Arjun Sharma by default
+#define PATIENT_ID      "P001"   // UPDATE THIS — P001 = James Washington by default
 
 // ============================================================
 //  GPIO PIN ASSIGNMENTS (ESP32-C6 DevKit)

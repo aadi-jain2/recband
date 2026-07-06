@@ -72,7 +72,7 @@ export function buildAdherenceState(
 ): PatientAdherenceState {
   const tier = ADHERENCE_TIERS[patientId] ?? "MEDIUM"
   const [rLow, rHigh] = TIER_RATES[tier]
-  const meds = (MED_TEMPLATES[diagnosis] ?? MED_TEMPLATES["PostSurg"]).map(m => ({
+  const meds = (MED_TEMPLATES[diagnosis] ?? MED_TEMPLATES["CHF"]).map(m => ({
     ...m,
     start_date: dischargeDate,
   }))
