@@ -14,7 +14,7 @@ export function Sidebar({ alertCount = 0 }: { alertCount?: number }) {
   const pathname = usePathname()
 
   return (
-    <aside className="flex h-screen w-52 shrink-0 flex-col border-r border-[#E5E7EB] bg-white">
+    <aside className="flex h-full w-[var(--sidebar-w)] shrink-0 flex-col border-r border-[#E5E7EB] bg-white">
       {/* Brand */}
       <div className="flex items-center gap-2 border-b border-[#E5E7EB] px-4 py-3.5">
         <Activity className="h-4 w-4 text-[#2563EB]" />

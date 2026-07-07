@@ -86,7 +86,7 @@ export default function AnalyticsPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[#F9FAFB] lg:flex-row">
       {/* ── Main column ─────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-auto p-3 space-y-5 sm:p-5 sm:space-y-6">
+      <div className="flex-1 overflow-auto content-pad py-3 space-y-5 sm:py-5 sm:space-y-6">
 
         {/* ── Page header ── */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -114,13 +114,14 @@ export default function AnalyticsPage() {
         {/* ── Risk distribution — 4 big cards + donut ── */}
         <div>
           <SectionTitle sub="Current snapshot across all monitored patients">Risk Distribution</SectionTitle>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-[1fr_1fr_1fr_1fr_200px]">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <RiskCard tier="CRITICAL" count={stats.criticalCount} total={stats.totalPatients} />
             <RiskCard tier="HIGH"     count={stats.highCount}     total={stats.totalPatients} />
             <RiskCard tier="MEDIUM"   count={stats.mediumCount}   total={stats.totalPatients} />
             <RiskCard tier="LOW"      count={stats.lowCount}      total={stats.totalPatients} />
-            {/* Donut */}
-            <div className="col-span-2 rounded-[3px] border border-[#E5E7EB] bg-white p-2 min-h-[140px] sm:col-span-1 lg:col-span-1">
+            {/* Donut — scales with viewport width */}
+            <div className="col-span-2 rounded-[3px] border border-[#E5E7EB] bg-white p-2 sm:col-span-1">
+              <div className="donut-box chart-wrap">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -144,6 +145,7 @@ export default function AnalyticsPage() {
                   />
                 </PieChart>
               </ResponsiveContainer>
+              </div>
             </div>
           </div>
         </div>
@@ -155,7 +157,8 @@ export default function AnalyticsPage() {
             <SectionTitle sub="Population-level composite risk — 30 days">
               Avg Risk Score Trend
             </SectionTitle>
-            <ResponsiveContainer width="100%" height={180}>
+            <div className="chart-wrap chart-h-md">
+            <ResponsiveContainer width="100%" height="100%">
               <LineChart data={MOCK_DAILY_RISK} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="0" stroke="#F3F4F6" vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#9CA3AF" }} tickLine={false} axisLine={false} interval={6} />
@@ -171,6 +174,7 @@ export default function AnalyticsPage() {
                 <Line dataKey="avgRisk" stroke="#2563EB" strokeWidth={2} dot={false} activeDot={{ r: 3 }} />
               </LineChart>
             </ResponsiveContainer>
+            </div>
           </div>
 
           {/* Alert reasons */}
@@ -178,7 +182,8 @@ export default function AnalyticsPage() {
             <SectionTitle sub="Most common clinical triggers this week">
               Top Alert Triggers
             </SectionTitle>
-            <ResponsiveContainer width="100%" height={180}>
+            <div className="chart-wrap chart-h-md">
+            <ResponsiveContainer width="100%" height="100%">
               <BarChart data={ALERT_REASONS} layout="vertical" margin={{ left: 0, right: 24, top: 4, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="0" stroke="#F3F4F6" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 9, fill: "#9CA3AF" }} tickLine={false} axisLine={false} />
@@ -187,6 +192,7 @@ export default function AnalyticsPage() {
                 <Bar dataKey="count" fill="#2563EB" radius={[0, 3, 3, 0]} label={{ position: "right", fontSize: 10, fill: "#9CA3AF" }} />
               </BarChart>
             </ResponsiveContainer>
+            </div>
           </div>
         </div>
 
@@ -195,8 +201,9 @@ export default function AnalyticsPage() {
           <SectionTitle sub="Average clinical (55%), behavioral (30%), and social (15%) contribution per risk tier">
             Risk Composition by Tier
           </SectionTitle>
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto]">
-            <ResponsiveContainer width="100%" height={200}>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_minmax(10rem,14rem)]">
+            <div className="chart-wrap chart-h-lg">
+            <ResponsiveContainer width="100%" height="100%">
               <BarChart data={compositionByTier} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
                 <CartesianGrid strokeDasharray="0" stroke="#F3F4F6" vertical={false} />
                 <XAxis
@@ -221,9 +228,10 @@ export default function AnalyticsPage() {
                 <Bar dataKey="social"     stackId="a" fill="#7C3AED" radius={[3,3,0,0]} />
               </BarChart>
             </ResponsiveContainer>
+            </div>
 
             {/* 3 insight stats on the right */}
-            <div className="flex flex-col gap-3 justify-center min-w-[180px]">
+            <div className="flex flex-col gap-3 justify-center w-full lg:w-auto">
               {[
                 { Icon: AlertOctagon, val: nonClinicalFlagged, label: "Non-clinical flags", sub: "Vitals normal; B/S elevated", color: "#D97706" },
                 { Icon: Pill,         val: adherenceAlerts,    label: "Adherence alerts",   sub: "Missed critical med 2+d",    color: "#DC2626" },
@@ -249,7 +257,8 @@ export default function AnalyticsPage() {
             <SectionTitle sub="Each dot = one patient. Hover for name.">
               Days Post-Discharge vs Risk Score
             </SectionTitle>
-            <ResponsiveContainer width="100%" height={220}>
+            <div className="chart-wrap chart-h-lg">
+            <ResponsiveContainer width="100%" height="100%">
               <ScatterChart margin={{ top: 4, right: 8, bottom: 16, left: -8 }}>
                 <CartesianGrid strokeDasharray="0" stroke="#F3F4F6" />
                 <XAxis
@@ -291,6 +300,7 @@ export default function AnalyticsPage() {
                 <Legend wrapperStyle={{ fontSize: 10 }} />
               </ScatterChart>
             </ResponsiveContainer>
+            </div>
           </div>
 
           {/* SHAP */}
@@ -321,7 +331,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* ── Right sidebar: watchlist — below charts on mobile ───────────────── */}
-      <div className="w-full flex-shrink-0 border-t border-[#E5E7EB] bg-white flex flex-col overflow-hidden lg:w-64 lg:border-l lg:border-t-0">
+      <div className="w-full flex-shrink-0 border-t border-[#E5E7EB] bg-white flex flex-col overflow-hidden lg:w-[clamp(14rem,22vw,16rem)] lg:border-l lg:border-t-0">
         <div className="flex items-center justify-between border-b border-[#E5E7EB] px-4 py-3">
           <div className="flex items-center gap-1.5 text-xs font-bold text-[#374151]">
             <Users className="h-3.5 w-3.5 text-[#9CA3AF]" />

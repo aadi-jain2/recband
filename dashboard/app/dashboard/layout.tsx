@@ -5,7 +5,7 @@ import { MobileNav } from "@/components/dashboard/mobile-nav"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-white sm:flex-row">
+    <div className="app-shell flex flex-col overflow-hidden bg-white sm:flex-row">
       {/* Sidebar — hidden below sm breakpoint */}
       <div className="hidden sm:block">
         <Sidebar alertCount={0} />

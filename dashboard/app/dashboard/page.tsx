@@ -85,7 +85,7 @@ export default function PatientOverviewPage() {
   return (
     <div className="flex h-full flex-col">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="border-b border-[#E5E7EB] bg-white px-3 py-3 sm:px-6 sm:py-4">
+      <div className="border-b border-[#E5E7EB] bg-white content-pad py-3 sm:py-4">
         <h1 className="text-base font-semibold text-[#111827]">Patient Monitor</h1>
         <p className="text-xs text-[#6B7280] mt-0.5">
           {stats.totalPatients} patients · last updated {formatRelativeTime(new Date().toISOString())}
@@ -109,16 +109,16 @@ export default function PatientOverviewPage() {
       </div>
 
       {/* ── Filter bar ──────────────────────────────────────────────────────── */}
-      <div className="filter-scroll flex items-center gap-2 border-b border-[#E5E7EB] bg-white px-3 py-2 sm:px-6">
+      <div className="filter-scroll flex items-center gap-2 border-b border-[#E5E7EB] bg-white content-pad py-2">
         {/* Search */}
-        <div className="relative shrink-0">
+        <div className="relative min-w-[clamp(8rem,30vw,13rem)] shrink-0 flex-1 sm:flex-none sm:w-auto">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#6B7280]" />
           <input
             type="text"
             placeholder="Search…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="h-7 w-36 rounded-[3px] border border-[#E5E7EB] bg-white pl-7 pr-3 text-xs text-[#111827] placeholder:text-[#9CA3AF] focus:border-[#2563EB] focus:outline-none sm:w-52"
+            className="h-7 w-full rounded-[3px] border border-[#E5E7EB] bg-white pl-7 pr-3 text-xs text-[#111827] placeholder:text-[#9CA3AF] focus:border-[#2563EB] focus:outline-none"
           />
         </div>
 
@@ -224,7 +224,7 @@ export default function PatientOverviewPage() {
                           <span className={cn("tabular text-sm font-semibold", getRiskColor(p.riskTier))}>
                             {Math.round(p.riskScore)}
                           </span>
-                          <div className="risk-bar-track w-16">
+                          <div className="risk-bar-track w-[clamp(2.5rem,8vw,4rem)]">
                             <div
                               className="risk-bar-fill"
                               style={{
@@ -261,7 +261,7 @@ export default function PatientOverviewPage() {
                       <td className="tabular text-xs text-[#6B7280]">D+{p.daysSinceDischarge}</td>
 
                       {/* Last alert */}
-                      <td className="max-w-[200px]">
+                      <td className="max-w-[min(12.5rem,30vw)]">
                         <p className="truncate text-xs text-[#6B7280]" title={alert}>
                           {alert.length > 55 ? alert.slice(0, 55) + "…" : alert}
                         </p>

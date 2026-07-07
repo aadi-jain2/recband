@@ -204,7 +204,7 @@ export default function AlertsPage() {
     <div className="flex h-full flex-col bg-[#F9FAFB]">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="border-b border-[#E5E7EB] bg-white px-3 py-3 sm:px-6 sm:py-4">
+      <div className="border-b border-[#E5E7EB] bg-white content-pad py-3 sm:py-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-base font-bold text-[#111827]">Clinical Alerts</h1>
@@ -250,7 +250,7 @@ export default function AlertsPage() {
       </div>
 
       {/* ── Alert list ─────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-auto p-3 sm:p-5">
+      <div className="flex-1 overflow-auto content-pad py-3 sm:py-5">
         {loading ? (
           <div className="space-y-3">
             {[1,2,3,4,5].map(i => (
@@ -274,7 +274,7 @@ export default function AlertsPage() {
             )}
           </div>
         ) : (
-          <div className="space-y-6 max-w-4xl">
+          <div className="space-y-6 w-full">
             {tierGroups.map(tier => (
               <TierSection
                 key={tier}

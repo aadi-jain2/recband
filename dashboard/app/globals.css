@@ -48,12 +48,25 @@
   --chart-cough:   #CA8A04;
   --chart-grid:    #F3F4F6;
   --chart-ref:     #D1D5DB;
+
+  /* Fluid viewport tokens — scale with screen size */
+  --app-height:    100dvh;
+  --content-pad:   clamp(0.75rem, 2.5vw, 1.5rem);
+  --sidebar-w:     clamp(11rem, 16vw, 13rem);
+  --gauge-size:    clamp(7.5rem, 22vw, 12.5rem);
+  --chart-h-sm:    clamp(5.5rem, 18vh, 8.75rem);
+  --chart-h-md:    clamp(8.75rem, 24vh, 11.25rem);
+  --chart-h-lg:    clamp(10rem, 30vh, 14rem);
+  --topbar-h:      clamp(2.5rem, 6vh, 2.75rem);
 }
 
 /* ── Reset & base ─────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 
-html { font-size: 14px; }
+html {
+  font-size: clamp(13px, 0.2vw + 12px, 14px);
+  height: 100%;
+}
 
 body {
   background: var(--bg);
@@ -61,8 +74,38 @@ body {
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 0.875rem;
   line-height: 1.5;
+  min-height: var(--app-height);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Fluid layout utilities ─────────────────────────────────────────────────── */
+.app-shell {
+  height: var(--app-height);
+  min-height: -webkit-fill-available;
+}
+
+.content-pad {
+  padding-left: var(--content-pad);
+  padding-right: var(--content-pad);
+}
+
+.chart-wrap { width: 100%; }
+.chart-h-sm { height: var(--chart-h-sm); min-height: 5rem; }
+.chart-h-md { height: var(--chart-h-md); min-height: 7rem; }
+.chart-h-lg { height: var(--chart-h-lg); min-height: 8rem; }
+
+.gauge-box {
+  width: 100%;
+  max-width: var(--gauge-size);
+  aspect-ratio: 1 / 0.88;
+  margin-inline: auto;
+}
+
+.donut-box {
+  width: 100%;
+  aspect-ratio: 1;
+  min-height: clamp(7rem, 20vw, 10rem);
 }
 
 /* Tabular numbers for all data columns — critical for scannable alignment */
@@ -340,7 +383,7 @@ button, a, [role="button"] {
   .sidebar-hide { display: none !important; }
   .mobile-nav {
     position: fixed; bottom: 0; left: 0; right: 0;
-    height: calc(56px + env(safe-area-inset-bottom, 0px));
+    height: calc(3.5rem + env(safe-area-inset-bottom, 0px));
     padding-bottom: env(safe-area-inset-bottom, 0px);
     background: white;
     border-top: 1px solid var(--border);
@@ -367,12 +410,13 @@ button, a, [role="button"] {
   }
   .filter-scroll::-webkit-scrollbar { display: none; }
 
-  /* Full data table preserved — scroll horizontally on mobile */
+  /* Full data table — scroll when needed, width follows viewport */
   .table-scroll {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    width: 100%;
   }
-  .clinical-table { min-width: 920px; }
+  .clinical-table { min-width: max(100%, 52rem); width: 100%; }
 
   /* Tab bars that don't wrap */
   .tab-scroll {

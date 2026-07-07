@@ -70,7 +70,7 @@ function VitalChart({
     return (
       <div className="rounded-[3px] border border-[#E5E7EB] p-3">
         <p className="text-xs font-semibold text-[#111827] mb-2">{label}</p>
-        <div className="flex h-[90px] items-center justify-center">
+        <div className="flex h-full items-center justify-center chart-h-sm">
           <span className="text-xs text-[#9CA3AF]">No data</span>
         </div>
       </div>
@@ -79,7 +79,8 @@ function VitalChart({
   return (
     <div className="rounded-[3px] border border-[#E5E7EB] p-3">
       <p className="text-xs font-semibold text-[#111827] mb-2">{label}</p>
-      <ResponsiveContainer width="100%" height={120}>
+      <div className="chart-wrap chart-h-sm">
+        <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
           <CartesianGrid strokeDasharray="0" stroke="#F3F4F6" vertical={false} />
           <XAxis dataKey="t" tick={{ fontSize: 9, fill: "#9CA3AF" }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
@@ -102,7 +103,8 @@ function VitalChart({
           )}
           <Line type="monotone" dataKey={dataKey as string} stroke={color} strokeWidth={1.5} dot={false} activeDot={{ r: 3, fill: color }} />
         </LineChart>
-      </ResponsiveContainer>
+        </ResponsiveContainer>
+      </div>
     </div>
   )
 }
@@ -139,7 +141,7 @@ function VitalKpi({
   const TrendIcon = trend === "up" ? TrendingUp : trend === "down" ? TrendingDown : Minus
   return (
     <div className={cn(
-      "flex min-w-[88px] flex-shrink-0 flex-col items-center justify-center gap-0.5 px-3 py-2.5 text-center sm:flex-1",
+      "flex min-w-[max(4.5rem,18vw)] flex-shrink-0 flex-col items-center justify-center gap-0.5 px-[clamp(0.5rem,2vw,0.75rem)] py-2.5 text-center sm:flex-1 sm:min-w-0",
       ok === false ? "bg-red-50" : "bg-white"
     )}>
       <div className="flex items-center gap-1">
@@ -251,7 +253,7 @@ export default function PatientDetailPage({ params }: PageProps) {
     <div className="flex h-full flex-col overflow-hidden bg-white">
 
       {/* ── Identity header ────────────────────────────────────────────────── */}
-      <div className="border-b border-[#E5E7EB] bg-white px-3 py-3 sm:px-6">
+      <div className="border-b border-[#E5E7EB] bg-white content-pad py-3">
         <div className="flex items-start gap-3">
           <Link href="/dashboard" className="mt-0.5 text-[#6B7280] hover:text-[#2563EB]">
             <ArrowLeft className="h-4 w-4" />
@@ -328,7 +330,7 @@ export default function PatientDetailPage({ params }: PageProps) {
       </div>
 
       {/* ── Tab bar ────────────────────────────────────────────────────────── */}
-      <div className="tab-scroll flex border-b border-[#E5E7EB] bg-white px-3 sm:px-6">
+      <div className="tab-scroll flex border-b border-[#E5E7EB] bg-white content-pad">
         {TABS.map(t => (
           <button
             key={t.key}
@@ -355,14 +357,14 @@ export default function PatientDetailPage({ params }: PageProps) {
 
         {/* ═══════════ OVERVIEW ════════════════════════════════════════════ */}
         {tab === "overview" && (
-          <div className="p-3 max-w-6xl sm:p-5">
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[200px_1fr_1fr]">
+          <div className="content-pad py-3 sm:py-5 w-full">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(10rem,1fr)_minmax(0,2fr)_minmax(0,2fr)]">
 
               {/* Col 1: Arc gauge */}
               <div className="flex flex-col gap-3">
                 <div className="rounded-[3px] border border-[#E5E7EB] p-4 flex flex-col items-center">
                   <p className="text-xs font-semibold text-[#6B7280] mb-1 self-start">Composite Risk</p>
-                  <ArcGauge score={p.riskScore} tier={p.riskTier} size={160} />
+                  <ArcGauge score={p.riskScore} tier={p.riskTier} />
                 </div>
                 <div className="rounded-[3px] border border-[#E5E7EB] p-3">
                   <p className="text-[11px] font-semibold text-[#374151] mb-2">Components</p>
@@ -484,7 +486,7 @@ export default function PatientDetailPage({ params }: PageProps) {
 
         {/* ═══════════ VITALS ══════════════════════════════════════════════ */}
         {tab === "vitals" && (
-          <div className="p-3 max-w-5xl sm:p-5">
+          <div className="content-pad py-3 sm:py-5 w-full">
             {vitalsData.length === 0 ? (
               <div className="rounded-[3px] border border-[#E5E7EB] p-8">
                 <EmptyReadings />
@@ -552,7 +554,7 @@ export default function PatientDetailPage({ params }: PageProps) {
 
         {/* ═══════════ ADHERENCE ═══════════════════════════════════════════ */}
         {tab === "adherence" && (
-          <div className="p-3 max-w-3xl space-y-3 sm:p-5">
+          <div className="content-pad py-3 space-y-3 sm:py-5 w-full">
             {adherence ? (
               <>
                 {/* Summary bar */}
@@ -734,7 +736,7 @@ export default function PatientDetailPage({ params }: PageProps) {
 
         {/* ═══════════ SOCIAL RISK ═════════════════════════════════════════ */}
         {tab === "social" && (
-          <div className="p-3 max-w-3xl space-y-3 sm:p-5">
+          <div className="content-pad py-3 space-y-3 sm:py-5 w-full">
             {sdoh ? (
               <>
                 {/* Score summary */}
@@ -800,7 +802,7 @@ export default function PatientDetailPage({ params }: PageProps) {
 
         {/* ═══════════ CARE NOTES ══════════════════════════════════════════ */}
         {tab === "notes" && (
-          <div className="p-3 max-w-2xl space-y-3 sm:p-5">
+          <div className="content-pad py-3 space-y-3 sm:py-5 w-full">
             <div className="rounded-[3px] border border-[#E5E7EB] overflow-hidden">
               <div className="flex items-center gap-1.5 border-b border-[#F3F4F6] px-3 py-2">
                 <FileText className="h-3.5 w-3.5 text-[#9CA3AF]" />
@@ -811,7 +813,7 @@ export default function PatientDetailPage({ params }: PageProps) {
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
                   placeholder="Enter call outcomes, interventions, patient concerns, next steps…"
-                  className="min-h-[160px] rounded-[3px] border-[#E5E7EB] font-mono text-xs resize-none focus:ring-1 focus:ring-[#2563EB]"
+                  className="min-h-[clamp(8rem,25vh,10rem)] w-full rounded-[3px] border-[#E5E7EB] font-mono text-xs resize-y focus:ring-1 focus:ring-[#2563EB]"
                 />
                 <div className="mt-2 flex gap-2">
                   <Button size="sm" className="h-7 rounded-[3px] bg-[#2563EB] text-xs text-white hover:bg-[#1D4ED8]">
