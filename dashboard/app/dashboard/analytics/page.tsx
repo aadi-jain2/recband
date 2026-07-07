@@ -84,12 +84,12 @@ export default function AnalyticsPage() {
   const topPatients = [...patients].sort((a,b) => b.riskScore - a.riskScore).slice(0, 10)
 
   return (
-    <div className="flex h-full overflow-hidden bg-[#F9FAFB]">
+    <div className="flex h-full flex-col overflow-hidden bg-[#F9FAFB] lg:flex-row">
       {/* ── Main column ─────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-auto p-5 space-y-6">
+      <div className="flex-1 overflow-auto p-3 space-y-5 sm:p-5 sm:space-y-6">
 
         {/* ── Page header ── */}
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-base font-bold text-[#111827]">Population Analytics</h1>
             <p className="text-xs text-[#9CA3AF] mt-0.5">
@@ -97,7 +97,7 @@ export default function AnalyticsPage() {
             </p>
           </div>
           {/* Model performance chips */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {[
               { label: "AUC-ROC",      value: "0.861" },
               { label: "Sensitivity",  value: "94.1%" },
@@ -114,13 +114,13 @@ export default function AnalyticsPage() {
         {/* ── Risk distribution — 4 big cards + donut ── */}
         <div>
           <SectionTitle sub="Current snapshot across all monitored patients">Risk Distribution</SectionTitle>
-          <div className="grid grid-cols-[1fr_1fr_1fr_1fr_200px] gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-[1fr_1fr_1fr_1fr_200px]">
             <RiskCard tier="CRITICAL" count={stats.criticalCount} total={stats.totalPatients} />
             <RiskCard tier="HIGH"     count={stats.highCount}     total={stats.totalPatients} />
             <RiskCard tier="MEDIUM"   count={stats.mediumCount}   total={stats.totalPatients} />
             <RiskCard tier="LOW"      count={stats.lowCount}      total={stats.totalPatients} />
             {/* Donut */}
-            <div className="rounded-[3px] border border-[#E5E7EB] bg-white p-2">
+            <div className="col-span-2 rounded-[3px] border border-[#E5E7EB] bg-white p-2 min-h-[140px] sm:col-span-1 lg:col-span-1">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -149,7 +149,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* ── Population risk trend + alert reasons ── */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {/* 30-day trend */}
           <div className="rounded-[3px] border border-[#E5E7EB] bg-white p-4">
             <SectionTitle sub="Population-level composite risk — 30 days">
@@ -195,7 +195,7 @@ export default function AnalyticsPage() {
           <SectionTitle sub="Average clinical (55%), behavioral (30%), and social (15%) contribution per risk tier">
             Risk Composition by Tier
           </SectionTitle>
-          <div className="grid grid-cols-[1fr_auto] gap-6">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto]">
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={compositionByTier} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
                 <CartesianGrid strokeDasharray="0" stroke="#F3F4F6" vertical={false} />
@@ -243,7 +243,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* ── Scatter + SHAP row ── */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {/* Scatter */}
           <div className="rounded-[3px] border border-[#E5E7EB] bg-white p-4">
             <SectionTitle sub="Each dot = one patient. Hover for name.">
@@ -320,8 +320,8 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* ── Right sidebar: watchlist ─────────────────────────────────────────── */}
-      <div className="w-64 flex-shrink-0 border-l border-[#E5E7EB] bg-white flex flex-col overflow-hidden">
+      {/* ── Right sidebar: watchlist — below charts on mobile ───────────────── */}
+      <div className="w-full flex-shrink-0 border-t border-[#E5E7EB] bg-white flex flex-col overflow-hidden lg:w-64 lg:border-l lg:border-t-0">
         <div className="flex items-center justify-between border-b border-[#E5E7EB] px-4 py-3">
           <div className="flex items-center gap-1.5 text-xs font-bold text-[#374151]">
             <Users className="h-3.5 w-3.5 text-[#9CA3AF]" />

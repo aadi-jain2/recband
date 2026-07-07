@@ -19,7 +19,7 @@ export function Sidebar({ alertCount = 0 }: { alertCount?: number }) {
       <div className="flex items-center gap-2 border-b border-[#E5E7EB] px-4 py-3.5">
         <Activity className="h-4 w-4 text-[#2563EB]" />
         <div>
-          <p className="text-sm font-bold text-[#111827] leading-none">RecoverPath</p>
+          <p className="text-sm font-bold text-[#111827] leading-none">Korazia</p>
           <p className="text-[10px] text-[#9CA3AF] mt-0.5 uppercase tracking-wide">Clinical Monitor</p>
         </div>
       </div>

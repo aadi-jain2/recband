@@ -1,6 +1,6 @@
-# RecoverPath — Post-Discharge Readmission Prevention ML Pipeline
+# Korazia — Post-Discharge Readmission Prevention ML Pipeline
 
-A complete ML pipeline for the RecoverPath wearable system — predicting 30-day hospital readmissions using multi-sensor wearable data from an ESP32C6-based device.
+A complete ML pipeline for the Korazia wearable system — predicting 30-day hospital readmissions using multi-sensor wearable data from an ESP32C6-based device.
 
 **Repository:** https://github.com/aadi-jain2/recband
 
@@ -13,7 +13,7 @@ The clinical dashboard is a Next.js app in `dashboard/`. To get a public URL:
 1. Push this repo to GitHub (already set up as `aadi-jain2/recband`)
 2. Go to [vercel.com/new](https://vercel.com/new) and import the repo
 3. Set **Root Directory** to `dashboard`
-4. Click **Deploy** — you get a URL like `https://recband.vercel.app`
+4. Click **Deploy** — you get a URL like `https://korazia.vercel.app` (or your Vercel-assigned domain)
 
 The deployed site runs in **demo mode** (synthetic patient data) unless you add Firebase env vars in Vercel → Settings → Environment Variables:
 

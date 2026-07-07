@@ -13,7 +13,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar alertCount={0} />
         <DataSourceBanner />
-        <main className="flex min-w-0 flex-1 flex-col overflow-hidden pb-14 sm:pb-0">
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] sm:pb-0">
           {children}
         </main>
       </div>

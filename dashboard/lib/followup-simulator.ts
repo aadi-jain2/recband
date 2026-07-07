@@ -47,7 +47,7 @@ export function buildFollowUpState(
     { type: "PCP",         dayOffset: 7,  provider: "Dr. Meenakshi Iyer" },
     { type: diagnosis === "CHF" ? "Cardiology" : diagnosis === "COPD" ? "Pulmonology" : "PCP",
                            dayOffset: 14, provider: diagnosis === "CHF" ? "Dr. Ramesh Nair (Cardiology)" : "Dr. Sunita Kapoor (Pulmonology)" },
-    { type: "Telehealth",  dayOffset: 21, provider: "RecoverPath Remote Care" },
+    { type: "Telehealth",  dayOffset: 21, provider: "Korazia Remote Care" },
     { type: "PCP",         dayOffset: 30, provider: "Dr. Meenakshi Iyer" },
   ]
 

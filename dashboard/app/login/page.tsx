@@ -38,7 +38,7 @@ export default function LoginPage() {
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm mb-3">
             <Activity className="h-8 w-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white">RecoverPath</h1>
+          <h1 className="text-2xl font-bold text-white">Korazia</h1>
           <p className="text-blue-200 text-sm mt-1">Clinical Monitoring Dashboard</p>
         </div>
 

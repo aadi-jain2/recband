@@ -63,17 +63,18 @@ function AlertCard({
 
   return (
     <div className={cn(
-      "flex items-stretch rounded-[3px] border transition-opacity overflow-hidden",
+      "flex flex-col overflow-hidden rounded-[3px] border transition-opacity sm:flex-row sm:items-stretch",
       cfg.border,
       ack ? "opacity-40" : ""
     )}>
       {/* Severity left accent */}
-      <div className={cn("w-1 flex-shrink-0", cfg.headerBg)} />
+      <div className={cn("hidden w-1 flex-shrink-0 sm:block", cfg.headerBg)} />
+      <div className={cn("h-1 w-full flex-shrink-0 sm:hidden", cfg.headerBg)} />
 
       {/* Main content */}
-      <div className="flex flex-1 items-start gap-4 p-4">
+      <div className="flex flex-1 flex-col gap-3 p-4 sm:flex-row sm:items-start sm:gap-4">
         {/* Patient info */}
-        <div className="min-w-[160px]">
+        <div className="min-w-0 sm:min-w-[160px]">
           <Link
             href={`/dashboard/patient/${alert.patientId}`}
             className="group flex items-center gap-1 font-semibold text-[#111827] hover:text-[#2563EB]"
@@ -98,7 +99,7 @@ function AlertCard({
         </div>
 
         {/* Time */}
-        <div className="flex-shrink-0 text-right">
+        <div className="flex-shrink-0 sm:text-right">
           <p className="tabular text-xs font-semibold text-[#374151]">{formatRelativeTime(alert.timestamp)}</p>
           <p className="text-[10px] text-[#9CA3AF] mt-0.5">{formatDateTime(alert.timestamp).split(",")[1]?.trim() ?? ""}</p>
         </div>
@@ -106,7 +107,7 @@ function AlertCard({
 
       {/* Action buttons */}
       {!ack && (
-        <div className="flex flex-shrink-0 flex-col items-stretch justify-center divide-y divide-[#F3F4F6] border-l border-[#E5E7EB]">
+        <div className="flex flex-shrink-0 flex-row items-stretch divide-x divide-[#F3F4F6] border-t border-[#E5E7EB] sm:flex-col sm:divide-x-0 sm:divide-y sm:border-l sm:border-t-0">
           <Link
             href={`/dashboard/patient/${alert.patientId}`}
             className="flex items-center gap-1.5 px-4 py-3 text-xs font-medium text-[#2563EB] hover:bg-[#EFF6FF] transition-colors"
@@ -203,8 +204,8 @@ export default function AlertsPage() {
     <div className="flex h-full flex-col bg-[#F9FAFB]">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="border-b border-[#E5E7EB] bg-white px-6 py-4">
-        <div className="flex items-start justify-between">
+      <div className="border-b border-[#E5E7EB] bg-white px-3 py-3 sm:px-6 sm:py-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-base font-bold text-[#111827]">Clinical Alerts</h1>
             <div className="mt-1 flex items-center gap-3 text-xs">
@@ -223,7 +224,7 @@ export default function AlertsPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {active.length > 0 && (
               <button
                 onClick={() => active.forEach(a => acknowledge(a.id))}
@@ -249,7 +250,7 @@ export default function AlertsPage() {
       </div>
 
       {/* ── Alert list ─────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-auto p-5">
+      <div className="flex-1 overflow-auto p-3 sm:p-5">
         {loading ? (
           <div className="space-y-3">
             {[1,2,3,4,5].map(i => (
@@ -314,7 +315,7 @@ export default function AlertsPage() {
 
       {/* ── Footer summary ─────────────────────────────────────────────────── */}
       {!loading && alerts.length > 0 && (
-        <div className="flex items-center justify-between border-t border-[#E5E7EB] bg-white px-6 py-2 text-[11px] text-[#9CA3AF]">
+        <div className="flex items-center justify-between border-t border-[#E5E7EB] bg-white px-3 py-2 text-[11px] text-[#9CA3AF] sm:px-6">
           <span>{active.length} active · {acked.length} acknowledged · {alerts.length} total</span>
           <div className="flex items-center gap-1">
             <Clock className="h-3 w-3" />

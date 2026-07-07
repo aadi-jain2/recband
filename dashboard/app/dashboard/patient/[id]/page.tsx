@@ -139,7 +139,7 @@ function VitalKpi({
   const TrendIcon = trend === "up" ? TrendingUp : trend === "down" ? TrendingDown : Minus
   return (
     <div className={cn(
-      "flex flex-1 flex-col items-center justify-center gap-0.5 px-3 py-2.5 text-center",
+      "flex min-w-[88px] flex-shrink-0 flex-col items-center justify-center gap-0.5 px-3 py-2.5 text-center sm:flex-1",
       ok === false ? "bg-red-50" : "bg-white"
     )}>
       <div className="flex items-center gap-1">
@@ -251,7 +251,7 @@ export default function PatientDetailPage({ params }: PageProps) {
     <div className="flex h-full flex-col overflow-hidden bg-white">
 
       {/* ── Identity header ────────────────────────────────────────────────── */}
-      <div className="border-b border-[#E5E7EB] bg-white px-6 py-3">
+      <div className="border-b border-[#E5E7EB] bg-white px-3 py-3 sm:px-6">
         <div className="flex items-start gap-3">
           <Link href="/dashboard" className="mt-0.5 text-[#6B7280] hover:text-[#2563EB]">
             <ArrowLeft className="h-4 w-4" />
@@ -328,13 +328,13 @@ export default function PatientDetailPage({ params }: PageProps) {
       </div>
 
       {/* ── Tab bar ────────────────────────────────────────────────────────── */}
-      <div className="flex border-b border-[#E5E7EB] bg-white px-6">
+      <div className="tab-scroll flex border-b border-[#E5E7EB] bg-white px-3 sm:px-6">
         {TABS.map(t => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
             className={cn(
-              "relative flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors",
+              "relative flex shrink-0 items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors sm:px-4",
               tab === t.key
                 ? "border-[#2563EB] text-[#2563EB]"
                 : "border-transparent text-[#6B7280] hover:text-[#374151] hover:border-[#E5E7EB]"
@@ -355,7 +355,7 @@ export default function PatientDetailPage({ params }: PageProps) {
 
         {/* ═══════════ OVERVIEW ════════════════════════════════════════════ */}
         {tab === "overview" && (
-          <div className="p-5 max-w-6xl">
+          <div className="p-3 max-w-6xl sm:p-5">
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[200px_1fr_1fr]">
 
               {/* Col 1: Arc gauge */}
@@ -484,7 +484,7 @@ export default function PatientDetailPage({ params }: PageProps) {
 
         {/* ═══════════ VITALS ══════════════════════════════════════════════ */}
         {tab === "vitals" && (
-          <div className="p-5 max-w-5xl">
+          <div className="p-3 max-w-5xl sm:p-5">
             {vitalsData.length === 0 ? (
               <div className="rounded-[3px] border border-[#E5E7EB] p-8">
                 <EmptyReadings />
@@ -492,7 +492,7 @@ export default function PatientDetailPage({ params }: PageProps) {
             ) : (
               <>
                 {/* 6-up current values */}
-                <div className="mb-4 grid grid-cols-6 divide-x divide-[#E5E7EB] rounded-[3px] border border-[#E5E7EB] overflow-hidden">
+                <div className="mb-4 grid grid-cols-3 divide-x divide-[#E5E7EB] rounded-[3px] border border-[#E5E7EB] overflow-hidden sm:grid-cols-6">
                   {[
                     { label: "SpO2",      val: spo2?.toFixed(1),  unit: "%",    warn: spo2Low  },
                     { label: "Heart Rate", val: hr ? Math.round(hr).toString() : null, unit: "bpm", warn: hrHigh },
@@ -516,7 +516,7 @@ export default function PatientDetailPage({ params }: PageProps) {
                   {vitalsData[0]?.tooltip} → {vitalsData[vitalsData.length - 1]?.tooltip}
                 </p>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <VitalChart data={vitalsData} dataKey="spo2"       color={C.spo2}  label="SpO2 (%)"           unit="%"    refLo={92}  normalLo={95}  normalHi={100} />
                   <VitalChart data={vitalsData} dataKey="hrEcg"      color={C.hr}    label="Heart Rate (bpm)"    unit="bpm"  refHi={100} normalLo={60}  normalHi={100} />
                   <VitalChart data={vitalsData} dataKey="hrvSdnn"    color={C.hrv}   label="HRV SDNN (ms)"       unit="ms"   refLo={20}  normalLo={25}  normalHi={80}  />
@@ -528,7 +528,7 @@ export default function PatientDetailPage({ params }: PageProps) {
                 {/* Anomaly scores */}
                 <div className="mt-3 rounded-[3px] border border-[#E5E7EB] p-3">
                   <p className="text-xs font-semibold text-[#374151] mb-3">Isolation Forest Anomaly Scores</p>
-                  <div className="grid grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                     {Object.entries(p.anomalyScores).map(([k, v]) => (
                       <div key={k}>
                         <div className="flex items-baseline justify-between mb-1">
@@ -552,11 +552,11 @@ export default function PatientDetailPage({ params }: PageProps) {
 
         {/* ═══════════ ADHERENCE ═══════════════════════════════════════════ */}
         {tab === "adherence" && (
-          <div className="p-5 max-w-3xl space-y-3">
+          <div className="p-3 max-w-3xl space-y-3 sm:p-5">
             {adherence ? (
               <>
                 {/* Summary bar */}
-                <div className="grid grid-cols-3 divide-x divide-[#E5E7EB] rounded-[3px] border border-[#E5E7EB] overflow-hidden">
+                <div className="grid grid-cols-1 divide-y divide-[#E5E7EB] rounded-[3px] border border-[#E5E7EB] overflow-hidden sm:grid-cols-3 sm:divide-x sm:divide-y-0">
                   {[
                     {
                       label: "7-day adherence",
@@ -734,11 +734,11 @@ export default function PatientDetailPage({ params }: PageProps) {
 
         {/* ═══════════ SOCIAL RISK ═════════════════════════════════════════ */}
         {tab === "social" && (
-          <div className="p-5 max-w-3xl space-y-3">
+          <div className="p-3 max-w-3xl space-y-3 sm:p-5">
             {sdoh ? (
               <>
                 {/* Score summary */}
-                <div className="grid grid-cols-3 divide-x divide-[#E5E7EB] rounded-[3px] border border-[#E5E7EB] overflow-hidden">
+                <div className="grid grid-cols-1 divide-y divide-[#E5E7EB] rounded-[3px] border border-[#E5E7EB] overflow-hidden sm:grid-cols-3 sm:divide-x sm:divide-y-0">
                   {[
                     { label: "SDOH Risk Score",   value: String(Math.round(Number(sdoh.social_risk_score))), warn: Number(sdoh.social_risk_score) >= 50 },
                     { label: "Active barriers",   value: String(sdoh.social_risk_factors.length), warn: sdoh.social_risk_factors.length >= 3 },
@@ -800,7 +800,7 @@ export default function PatientDetailPage({ params }: PageProps) {
 
         {/* ═══════════ CARE NOTES ══════════════════════════════════════════ */}
         {tab === "notes" && (
-          <div className="p-5 max-w-2xl space-y-3">
+          <div className="p-3 max-w-2xl space-y-3 sm:p-5">
             <div className="rounded-[3px] border border-[#E5E7EB] overflow-hidden">
               <div className="flex items-center gap-1.5 border-b border-[#F3F4F6] px-3 py-2">
                 <FileText className="h-3.5 w-3.5 text-[#9CA3AF]" />

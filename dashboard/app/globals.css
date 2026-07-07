@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* ── RecoverPath Design System ─────────────────────────────────────────────
+/* ── Korazia Design System ─────────────────────────────────────────────────
    Clinical-grade interface: dense, precise, white background, zero decoration.
    Color used ONLY for semantic meaning — never decoration.
    Reference: Epic EHR, Linear, Stripe Dashboard, Bloomberg Terminal.
@@ -340,7 +340,8 @@ button, a, [role="button"] {
   .sidebar-hide { display: none !important; }
   .mobile-nav {
     position: fixed; bottom: 0; left: 0; right: 0;
-    height: 56px;
+    height: calc(56px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
     background: white;
     border-top: 1px solid var(--border);
     display: flex;
@@ -351,6 +352,33 @@ button, a, [role="button"] {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     font-size: 10px; color: var(--text-secondary);
     gap: 2px;
+    min-height: 44px;
   }
   .mobile-nav a.active { color: var(--blue); }
+
+  /* Page sections — tighter padding on small screens */
+  .page-section { padding-left: 0.75rem; padding-right: 0.75rem; }
+
+  /* Horizontally scrollable filter bars — all filters remain accessible */
+  .filter-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .filter-scroll::-webkit-scrollbar { display: none; }
+
+  /* Full data table preserved — scroll horizontally on mobile */
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .clinical-table { min-width: 920px; }
+
+  /* Tab bars that don't wrap */
+  .tab-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .tab-scroll::-webkit-scrollbar { display: none; }
 }

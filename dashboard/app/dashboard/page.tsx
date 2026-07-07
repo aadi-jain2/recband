@@ -85,7 +85,7 @@ export default function PatientOverviewPage() {
   return (
     <div className="flex h-full flex-col">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="border-b border-[#E5E7EB] bg-white px-6 py-4">
+      <div className="border-b border-[#E5E7EB] bg-white px-3 py-3 sm:px-6 sm:py-4">
         <h1 className="text-base font-semibold text-[#111827]">Patient Monitor</h1>
         <p className="text-xs text-[#6B7280] mt-0.5">
           {stats.totalPatients} patients · last updated {formatRelativeTime(new Date().toISOString())}
@@ -93,7 +93,7 @@ export default function PatientOverviewPage() {
       </div>
 
       {/* ── Stat bar ────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-5 border-b border-[#E5E7EB] bg-[#F9FAFB]">
+      <div className="grid grid-cols-2 border-b border-[#E5E7EB] bg-[#F9FAFB] sm:grid-cols-3 lg:grid-cols-5">
         {[
           { label: "TOTAL",        value: stats.totalPatients,  color: "text-[#111827]" },
           { label: "CRITICAL",     value: stats.criticalCount,  color: "text-red-600"   },
@@ -101,60 +101,58 @@ export default function PatientOverviewPage() {
           { label: "MEDIUM",       value: stats.mediumCount,    color: "text-yellow-700"},
           { label: "NON-CLIN ⚑",  value: nonClinCount,         color: "text-orange-600"},
         ].map(s => (
-          <div key={s.label} className="border-r border-[#E5E7EB] px-4 py-3 last:border-r-0">
-            <p className={cn("tabular text-xl font-bold", s.color)}>{loading ? "—" : s.value}</p>
+          <div key={s.label} className="border-r border-b border-[#E5E7EB] px-3 py-2.5 last:border-r-0 sm:px-4 sm:py-3 lg:border-b-0">
+            <p className={cn("tabular text-lg font-bold sm:text-xl", s.color)}>{loading ? "—" : s.value}</p>
             <p className="text-[10px] font-medium uppercase tracking-wider text-[#6B7280] mt-0.5">{s.label}</p>
           </div>
         ))}
       </div>
 
       {/* ── Filter bar ──────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 border-b border-[#E5E7EB] bg-white px-6 py-2">
+      <div className="filter-scroll flex items-center gap-2 border-b border-[#E5E7EB] bg-white px-3 py-2 sm:px-6">
         {/* Search */}
-        <div className="relative">
+        <div className="relative shrink-0">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#6B7280]" />
           <input
             type="text"
-            placeholder="Search name, ID, diagnosis …"
+            placeholder="Search…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="h-7 w-52 rounded-[3px] border border-[#E5E7EB] bg-white pl-7 pr-3 text-xs text-[#111827] placeholder:text-[#9CA3AF] focus:border-[#2563EB] focus:outline-none"
+            className="h-7 w-36 rounded-[3px] border border-[#E5E7EB] bg-white pl-7 pr-3 text-xs text-[#111827] placeholder:text-[#9CA3AF] focus:border-[#2563EB] focus:outline-none sm:w-52"
           />
         </div>
 
-        <div className="h-4 w-px bg-[#E5E7EB]" />
+        <div className="hidden h-4 w-px shrink-0 bg-[#E5E7EB] sm:block" />
 
         {/* Tier filters */}
         {(["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW"] as const).map(t => (
           <button
             key={t}
             onClick={() => setTierFilter(t)}
-            className={cn(
-              "filter-btn",
-              tierFilter === t && "active"
-            )}
+            className={cn("filter-btn shrink-0", tierFilter === t && "active")}
           >
             {t}
           </button>
         ))}
 
-        <div className="h-4 w-px bg-[#E5E7EB]" />
+        <div className="hidden h-4 w-px shrink-0 bg-[#E5E7EB] sm:block" />
 
         <button
           onClick={() => setNonClinical(p => !p)}
-          className={cn("filter-btn gap-1.5", nonClinical && "active")}
+          className={cn("filter-btn shrink-0 gap-1.5", nonClinical && "active")}
         >
           <AlertTriangle className="h-3 w-3" />
-          Non-clinical risk only
+          <span className="hidden sm:inline">Non-clinical risk only</span>
+          <span className="sm:hidden">Non-clin</span>
         </button>
 
-        <span className="ml-auto text-xs text-[#6B7280] tabular">
-          {filtered.length} of {patients.length}
+        <span className="ml-auto shrink-0 text-xs text-[#6B7280] tabular">
+          {filtered.length}/{patients.length}
         </span>
       </div>
 
-      {/* ── Table ───────────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-auto">
+      {/* ── Table — full columns, horizontal scroll on mobile ───────────────── */}
+      <div className="table-scroll flex-1 overflow-auto">
         <table className="clinical-table">
           <thead>
             <tr>
